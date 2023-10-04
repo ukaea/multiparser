@@ -1,13 +1,10 @@
-import pytest
 import os.path
-import pandas
 import tempfile
-import toml
+
+import pytest
+from conftest import fake_csv, fake_feather, fake_nml, fake_toml
 
 import multiparser.parsing as cc_parse
-
-from conftest import fake_csv, fake_toml, fake_nml, fake_feather
-
 
 DATA_LIBRARY: str = os.path.join(os.path.dirname(__file__), "data")
 
@@ -48,3 +45,12 @@ def test_parse_toml() -> None:
         _, _data2 = cc_parse.record_file(_data_file, None, None)
         assert "timestamp" in _meta
         assert list(sorted(_data.items())) == sorted(_data2.items())
+
+
+@pytest.mark.parsing
+def test_unrecognised_file_type() -> None:
+    with tempfile.NamedTemporaryFile(suffix=".npy") as temp_f:
+        with open(temp_f.name, "w") as out_f:
+            out_f.write("...")
+        with pytest.raises(TypeError):
+            cc_parse.record_file(temp_f.name, None, None)

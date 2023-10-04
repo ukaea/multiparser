@@ -1,17 +1,15 @@
-import threading
-import typing
-import time
-import os.path
 import datetime
+import os.path
+import threading
+import time
+import typing
 
 import multiparser.parsing as cc_parse
 
 
 class FileMonitor:
     def __init__(
-        self,
-        per_thread_callback: typing.Callable,
-        interval: float = 10.0
+        self, per_thread_callback: typing.Callable, interval: float = 10.0
     ) -> None:
         """Create an instance of the file monitor for tracking file modifications.
 
@@ -39,11 +37,12 @@ class FileMonitor:
 
     def _prepare_threads(self) -> None:
         for file, tracked_items in self._files.items():
+
             def _read_action(
                 callback: typing.Callable,
                 file_name: str,
                 termination_trigger: threading.Event,
-                tracked_info: typing.List[str] | None
+                tracked_info: typing.Dict[str, typing.Any],
             ) -> None:
                 while not termination_trigger.is_set():
                     time.sleep(self._interval)
@@ -55,7 +54,6 @@ class FileMonitor:
                     # If the file has not been modified then we do not need to parse it
                     if (_modified_time, file_name) in self._records:
                         continue
-                    print(tracked_info)
                     _meta, _data = cc_parse.record_file(file_name, **tracked_info)
                     callback(_data, _meta)
                     self._records.append((_modified_time, file_name))
@@ -63,15 +61,15 @@ class FileMonitor:
             # Create a thread for each file to be read
             self._threads[file] = threading.Thread(
                 target=_read_action,
-                args=(
-                    self._per_thread_callback,
-                    file,
-                    self._complete,
-                    tracked_items
-                ),
+                args=(self._per_thread_callback, file, self._complete, tracked_items),
             )
-    
-    def track(self, file_name: str, values: typing.List[str] | None=None, regex: typing.List[str] | None=None) -> None:
+
+    def track(
+        self,
+        file_name: str,
+        values: typing.List[str] | None = None,
+        regex: typing.List[str] | None = None,
+    ) -> None:
         self._files[file_name] = {"tracked_values": values, "tracked_regex": regex}
 
     def terminate(self) -> None:
