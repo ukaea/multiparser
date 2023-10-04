@@ -22,7 +22,10 @@ def test_run_on_directory(repeat) -> None:
         def per_thread_callback(data, meta):
             print(json.dumps({"time_recorded": meta["timestamp"], "file": meta["file_name"], "data": data}, indent=2))
 
-        with cc_monitor.FileMonitor(per_thread_callback, glob.glob(os.path.join(temp_d, "*")), interval=_interval) as monitor:
+        with cc_monitor.FileMonitor(per_thread_callback, interval=_interval) as monitor:
+            for file in glob.glob(os.path.join(temp_d, "*")):
+                monitor.track(file)
+            monitor.run()
             for _ in range(10):
                 time.sleep(_interval)
             monitor.terminate()

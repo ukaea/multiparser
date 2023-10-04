@@ -10,6 +10,7 @@ import toml
 import datetime
 import platform
 import os.path
+import re
 
 
 TimeStampedData = typing.Tuple[
@@ -87,11 +88,34 @@ SUFFIX_PARSERS: typing.Dict[typing.Tuple[str, ...], typing.Callable] = {
 }
 
 
-def record_file(input_file: str) -> TimeStampedData:
+def record_file(
+    input_file: str,
+    tracked_values: typing.List[str] | None,
+    tracked_regex: typing.List[str] | None
+) -> TimeStampedData:
     _extension: str = os.path.splitext(input_file)[1].replace('.', '')
+    _tracked_vals: typing.List[str] | None = [i.lower() for i in tracked_values or []]
 
     for key, parser in SUFFIX_PARSERS.items():
-        if _extension in key:
-            return parser(input_file)
+        if _extension not in key:
+            continue
+        _parsed_data: typing.Dict[str, typing.Any] = parser(input_file)
+
+        if not _tracked_vals and not tracked_regex:
+            return _parsed_data
+        
+        _out_data: typing.Dict[str, typing.Any] = {}
+
+        for reg_ex in tracked_regex or []:
+            _out_data |= {
+                k: v for k, v in _out_data.items()
+                if re.findall(reg_ex, k)
+            }
+        
+        _out_data |= {
+            k: v for k, v in _out_data.items()
+            if k not in _out_data and k in _tracked_vals
+        }
+        return _out_data
     
     raise TypeError(f"File of type '{_extension}' could not be recognised.")

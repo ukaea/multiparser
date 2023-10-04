@@ -47,5 +47,4 @@ def fake_nml(output_dir: str) -> str:
             out_str.append(f"{_key}={_val}")
         out_str.append("/")
         out_f.write("\n".join(out_str))
-        print(out_str)
     return _file_name

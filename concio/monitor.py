@@ -11,7 +11,6 @@ class FileMonitor:
     def __init__(
         self,
         per_thread_callback: typing.Callable,
-        file_list: typing.List[str],
         interval: float = 10.0
     ) -> None:
         """Create an instance of the file monitor for tracking file modifications.
@@ -26,24 +25,26 @@ class FileMonitor:
             Dictionary for caching values read from the file parsing threads
         per_thread_callback : typing.Callable
             function to be executed whenever a monitored file is modified
+        var_list : List[str], optional
+            list of variables to track from the given files
         interval : float, optional
             the refresh rate of the file monitors, by default 10.0 seconds
         """
         self._interval: float = interval
         self._per_thread_callback = per_thread_callback
         self._complete = threading.Event()
-        self._files: typing.List[str] = file_list
+        self._files: typing.Dict[str, typing.List[str] | None] = {}
         self._threads: typing.Dict[str, threading.Thread] = {}
         self._records: typing.List[typing.Tuple[str, str]] = []
-        self._prepare_threads()
 
     def _prepare_threads(self) -> None:
-        for file in self._files:
+        for file, tracked_items in self._files.items():
             def _read_action(
                 callback: typing.Callable,
                 file_name: str,
                 termination_trigger: threading.Event,
-            ):
+                tracked_info: typing.List[str] | None
+            ) -> None:
                 while not termination_trigger.is_set():
                     time.sleep(self._interval)
                     _modified_time_stamp = os.path.getmtime(file_name)
@@ -54,8 +55,8 @@ class FileMonitor:
                     # If the file has not been modified then we do not need to parse it
                     if (_modified_time, file_name) in self._records:
                         continue
-
-                    _meta, _data = cc_parse.record_file(file_name)
+                    print(tracked_info)
+                    _meta, _data = cc_parse.record_file(file_name, **tracked_info)
                     callback(_data, _meta)
                     self._records.append((_modified_time, file_name))
 
@@ -66,18 +67,25 @@ class FileMonitor:
                     self._per_thread_callback,
                     file,
                     self._complete,
+                    tracked_items
                 ),
             )
+    
+    def track(self, file_name: str, values: typing.List[str] | None=None, regex: typing.List[str] | None=None) -> None:
+        self._files[file_name] = {"tracked_values": values, "tracked_regex": regex}
 
     def terminate(self) -> None:
         self._complete.set()
         for thread in self._threads.values():
             thread.join()
 
-    def __enter__(self) -> "FileMonitor":
+    def run(self) -> None:
+        self._prepare_threads()
         self._running = True
         for thread in self._threads.values():
             thread.start()
+
+    def __enter__(self) -> "FileMonitor":
         return self
 
     def __exit__(self, *args, **kwargs) -> None:
