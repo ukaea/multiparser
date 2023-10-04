@@ -6,6 +6,8 @@ import typing
 
 import multiparser.parsing as cc_parse
 
+__all__ = ["FileMonitor"]
+
 
 class FileMonitor:
     def __init__(

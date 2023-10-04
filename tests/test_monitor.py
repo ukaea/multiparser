@@ -10,7 +10,7 @@ import pytest
 import toml
 from conftest import fake_csv, fake_nml, fake_toml, to_nml
 
-import multiparser.monitor as cc_monitor
+import multiparser
 
 
 @pytest.mark.monitor
@@ -32,7 +32,9 @@ def test_run_on_directory_all(repeat) -> None:
                 )
             )
 
-        with cc_monitor.FileMonitor(per_thread_callback, interval=_interval) as monitor:
+        with multiparser.FileMonitor(
+            per_thread_callback, interval=_interval
+        ) as monitor:
             for file in glob.glob(os.path.join(temp_d, "*")):
                 monitor.track(file)
             monitor.run()
@@ -73,7 +75,9 @@ def test_run_on_directory_filtered() -> None:
                 )
             )
 
-        with cc_monitor.FileMonitor(per_thread_callback, interval=_interval) as monitor:
+        with multiparser.FileMonitor(
+            per_thread_callback, interval=_interval
+        ) as monitor:
             monitor.track(_csv_file, ["d_other"], [r"\w_value"])
             monitor.track(_nml_file, [], ["\w_val_\w"])
             monitor.track(_toml_file, ["input_swe"], [r"input_\d"])
