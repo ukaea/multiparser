@@ -251,3 +251,4 @@ $RECYCLE.BIN/
 
 # Test data
 tests/data
+.vscode
