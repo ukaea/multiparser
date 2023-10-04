@@ -1,4 +1,3 @@
-import glob
 import json
 import os
 import random
@@ -35,8 +34,7 @@ def test_run_on_directory_all() -> None:
         with multiparser.FileMonitor(
             per_thread_callback, interval=_interval
         ) as monitor:
-            for file in glob.glob(os.path.join(temp_d, "*")):
-                monitor.track(file)
+            monitor.track(os.path.join(temp_d, "*"))
             monitor.run()
             for _ in range(10):
                 time.sleep(_interval)
@@ -64,6 +62,7 @@ def test_run_on_directory_filtered() -> None:
         to_nml(_nml_dict, _nml_file := os.path.join(temp_d, "nml_file.nml"))
 
         def per_thread_callback(data, meta):
+            return
             print(
                 json.dumps(
                     {
@@ -78,9 +77,9 @@ def test_run_on_directory_filtered() -> None:
         with multiparser.FileMonitor(
             per_thread_callback, interval=_interval
         ) as monitor:
-            monitor.track(_csv_file, ["d_other"], [r"\w_value"])
-            monitor.track(_nml_file, [], ["\w_val_\w"])
-            monitor.track(_toml_file, ["input_swe"], [r"input_\d"])
+            monitor.track(_csv_file, ["d_other", r"\w_value"])
+            monitor.track(_nml_file, ["\w_val_\w"])
+            monitor.track(_toml_file, ["input_swe", r"input_\d"])
             monitor.run()
             for _ in range(10):
                 time.sleep(_interval)
