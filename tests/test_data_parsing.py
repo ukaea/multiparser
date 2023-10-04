@@ -4,7 +4,7 @@ import pandas
 import tempfile
 import toml
 
-import concio.parsing as cc_parse
+import multiparser.parsing as cc_parse
 
 from conftest import fake_csv, fake_toml, fake_nml, fake_feather
 

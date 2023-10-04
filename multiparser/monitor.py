@@ -4,7 +4,7 @@ import time
 import os.path
 import datetime
 
-import concio.parsing as cc_parse
+import multiparser.parsing as cc_parse
 
 
 class FileMonitor:

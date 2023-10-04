@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "concio"
+name = "multiparser"
 version = "0.1.0"
 description = ""
 authors = ["Kristian Zarębski <kristian.zarebski@ukaea.uk>"]
