@@ -1,0 +1,97 @@
+import typing
+import os.path
+
+import pandas
+import f90nml
+import pickle
+import json
+import yaml
+import toml
+import datetime
+import platform
+import os.path
+
+
+TimeStampedData = typing.Tuple[
+    typing.Dict[str, str],
+    typing.Dict[str, typing.Any]
+]
+
+
+def meta_stamp_record(parser: typing.Callable) -> typing.Callable:
+    def _wrapper(input_file: str) -> TimeStampedData:
+        _data: typing.Dict[str, typing.Any] = parser(input_file)
+        _meta_data: typing.Dict[str, str] = {
+            "timestamp": datetime.datetime.fromtimestamp(os.path.getmtime(input_file)).strftime("%Y-%M-%d %H:%M:%S.%f"),
+            "hostname": platform.node(),
+            "file_name": input_file
+        }
+        return _meta_data, _data
+    return _wrapper
+
+
+@meta_stamp_record
+def record_json(input_file: str) -> TimeStampedData:
+    return json.load(open(input_file))
+
+
+@meta_stamp_record
+def record_yaml(input_file: str) -> TimeStampedData:
+    return yaml.load(open(input_file), Loader=yaml.SafeLoader)
+
+
+@meta_stamp_record
+def record_pickle(input_file: str) -> TimeStampedData:
+    return pickle.load(open(input_file, "rb"))
+
+
+@meta_stamp_record
+def record_fortran_nml(input_file: str) -> TimeStampedData:
+    return f90nml.read(input_file)
+
+
+@meta_stamp_record
+def record_csv(input_file: str) -> TimeStampedData:
+    return pandas.read_csv(input_file).to_dict()
+
+
+@meta_stamp_record
+def record_feather(input_file: str) -> TimeStampedData:
+    return pandas.read_feather(input_file).to_dict()
+
+
+@meta_stamp_record
+def record_parquet(input_file: str) -> TimeStampedData:
+    return pandas.read_parquet(input_file).to_dict()
+
+
+@meta_stamp_record
+def record_hdf(input_file: str) -> TimeStampedData:
+    return pandas.read_hdf(input_file).to_dict()
+
+
+@meta_stamp_record
+def record_toml(input_file: str) -> TimeStampedData:
+    return toml.load(input_file)
+
+
+SUFFIX_PARSERS: typing.Dict[typing.Tuple[str, ...], typing.Callable] = {
+    ("csv",): record_csv,
+    ("pkl", "pickle"): record_pickle,
+    ("pqt",): record_parquet,
+    ("hdf", "h5", "hdf5"): record_hdf,
+    ("toml",): record_toml,
+    ("yaml", "yml"): record_yaml,
+    ("nml",): record_fortran_nml,
+    ("json",): record_json
+}
+
+
+def record_file(input_file: str) -> TimeStampedData:
+    _extension: str = os.path.splitext(input_file)[1].replace('.', '')
+
+    for key, parser in SUFFIX_PARSERS.items():
+        if _extension in key:
+            return parser(input_file)
+    
+    raise TypeError(f"File of type '{_extension}' could not be recognised.")
