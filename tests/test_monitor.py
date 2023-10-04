@@ -14,7 +14,7 @@ import multiparser
 
 
 @pytest.mark.monitor
-def test_run_on_directory_all(repeat) -> None:
+def test_run_on_directory_all() -> None:
     _interval: float = 0.1
     with tempfile.TemporaryDirectory() as temp_d:
         for _ in range(random.randint(2, 10)):

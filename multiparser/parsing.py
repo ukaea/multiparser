@@ -24,6 +24,7 @@ def meta_stamp_record(parser: typing.Callable) -> typing.Callable:
             "hostname": platform.node(),
             "file_name": input_file,
         }
+        print(_data)
         return _meta_data, _data[1]
 
     return _wrapper
@@ -51,7 +52,7 @@ def record_fortran_nml(input_file: str) -> TimeStampedData:
 
 @meta_stamp_record
 def record_csv(input_file: str) -> TimeStampedData:
-    return pandas.read_csv(input_file).to_dict()
+    return {}, pandas.read_csv(input_file).to_dict()
 
 
 @meta_stamp_record
