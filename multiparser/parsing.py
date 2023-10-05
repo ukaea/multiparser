@@ -102,23 +102,22 @@ def record_log(
 
     for label, regex in regex_items:
         if _results := re.findall(regex, _line):
-            if not label and len(_results[0]) != 2:
-                raise ValueError(
-                    f"Regex string '{regex}' without label assignment must return a key-value pair"
-                )
-            else:
-                if len(_results[0]) == 1:
-                    _value_str: str = _results[0]
-                    _label = None
-                elif len(_results[0]) == 2:
-                    _label, _value_str = _results[0]
-                else:
+            for i, result in enumerate(_results):
+                if not label and len(result) != 2:
                     raise ValueError(
-                        f"Regex string '{regex}' with label assignment must return a value"
+                        f"Regex string '{regex}' without label assignment must return a key-value pair"
                     )
-            _out_data[label or _label] = (
-                _converter(_value_str) if convert else _value_str
-            )
+                else:
+                    if len(result) == 1:
+                        _value_str: str = result
+                        _label = f"{label}_{i}" if len(_results) > 1 else label
+                    elif len(result) == 2:
+                        _label, _value_str = result
+                    else:
+                        raise ValueError(
+                            f"Regex string '{regex}' with label assignment must return a value"
+                        )
+                _out_data[_label] = _converter(_value_str) if convert else _value_str
     return {}, _out_data
 
 

@@ -28,7 +28,7 @@ first match in the group. These labels can be overwritten using the `labels` arg
 ```python
 monitor.tail(
     path_glob_exprs=["output.log"],
-    regular_exprs=["my_param=\d+"],
+    regular_exprs=["my_param=(\d+)"],
     labels=["My Parameter"]
 )
 ```
@@ -38,10 +38,21 @@ monitor.tail(
 The two methods of using regular expressions are either a single expression:
 
 ```python
-r"\w+=\d+\.\d+"
+path_glob_exprs=[r"\w+=(\d+\.\d+)"],
+labels=["value"]
 ```
 
-whereby a label argument for this value will be required... **COMPLETE DOCS**
+a label argument for this value will then be required, if multiple results are found the value
+will be given a numerical suffix.
+
+The alternative is to provide a RegEx which captures the variable name directly:
+
+```python
+path_glob_exprs=[r"(\w+)=(\d+\.\d+)", r"(\w+_\d+)=(\d+\.\d+)"],
+labels=["value", None]
+```
+
+here provision of a label is now optional, the label `None` means the label will be taken from the regex itself.
 
 ## Callback Function Specification
 
