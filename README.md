@@ -64,8 +64,9 @@ def run_monitor() -> None:
         interval=1.0                           # refresh interval in seconds
     ) as monitor:
         monitor.track("my_file.csv")                          # Track a CSV file in the current directory
-        monitor.track("my_output.toml", ["important_param"])  # Track a specific value (by name) in a file
-        monitor.track("my_metrics.nml", None, [r"^metric_\d"]) # Track a set of values using regex
+        monitor.track("*.toml", ["important_param"])          # Track a specific value (by name) in a set of files
+        monitor.track("my_metrics.nml", [r"^metric_\d"])      # Track a set of values using regex
+        monitor.exclude("param*.toml")                        # Exclude file patterns from tracking
         monitor.run()
         for _ in range(10):
             time.sleep(1)
