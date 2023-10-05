@@ -1,3 +1,4 @@
+import contextlib
 import datetime
 import json
 import os.path
@@ -7,7 +8,9 @@ import re
 import typing
 
 import f90nml
+import loguru
 import pandas
+import sh
 import toml
 import yaml
 
@@ -15,8 +18,8 @@ TimeStampedData = typing.Tuple[typing.Dict[str, str], typing.Dict[str, typing.An
 
 
 def meta_stamp_record(parser: typing.Callable) -> typing.Callable:
-    def _wrapper(input_file: str) -> TimeStampedData:
-        _data: TimeStampedData = parser(input_file)
+    def _wrapper(input_file: str, *args, **kwargs) -> TimeStampedData:
+        _data: TimeStampedData = parser(input_file, *args, **kwargs)
         _meta_data: typing.Dict[str, str] = {
             "timestamp": datetime.datetime.fromtimestamp(
                 os.path.getmtime(input_file)
@@ -74,6 +77,51 @@ def record_toml(input_file: str) -> TimeStampedData:
     return {}, toml.load(input_file)
 
 
+@meta_stamp_record
+def record_log(
+    input_file: str,
+    regex_items: typing.List[typing.Tuple[str | None, str]] = None,
+    convert: bool = True,
+) -> TimeStampedData:
+    """Records latest line only"""
+
+    def _converter(value: str) -> typing.Any:
+        with contextlib.suppress(ValueError):
+            _int_val = int(value)
+            return _int_val
+        if value.replace(".", "", 1).isdigit():
+            return float(value)
+        return value
+
+    _out_data: typing.Dict[str, typing.Any] = {}
+
+    _line = sh.tail(f"-1", input_file)
+
+    if not regex_items:
+        return {}, {"line": _line}
+
+    for label, regex in regex_items:
+        if _results := re.findall(regex, _line):
+            if not label and len(_results[0]) != 2:
+                raise ValueError(
+                    f"Regex string '{regex}' without label assignment must return a key-value pair"
+                )
+            else:
+                if len(_results[0]) == 1:
+                    _value_str: str = _results[0]
+                    _label = None
+                elif len(_results[0]) == 2:
+                    _label, _value_str = _results[0]
+                else:
+                    raise ValueError(
+                        f"Regex string '{regex}' with label assignment must return a value"
+                    )
+            _out_data[label or _label] = (
+                _converter(_value_str) if convert else _value_str
+            )
+    return {}, _out_data
+
+
 SUFFIX_PARSERS: typing.Dict[typing.Tuple[str, ...], typing.Callable] = {
     ("csv",): record_csv,
     ("pkl", "pickle"): record_pickle,
@@ -109,4 +157,7 @@ def record_file(
 
         return _parsed_data[0], _out_data
 
-    raise TypeError(f"File of type '{_extension}' could not be recognised.")
+    loguru.logger.error(
+        f"The file extension '{_extension}' is not supported for 'record_file', did you mean to use 'tail'?"
+    )
+    raise TypeError(f"File of type '{_extension}' could not be recognised")

@@ -12,12 +12,15 @@ pandas = "^2.1.1"
 toml = "^0.10.2"
 pyyaml = "^6.0.1"
 pyarrow = "^13.0.0"
+sh = "^2.0.6"
+loguru = "^0.7.2"
 
 
 [tool.poetry.group.testing.dependencies]
 pytest = "^7.4.2"
 pytest-sugar = "^0.9.7"
 pytest-cov = "^4.1.0"
+xeger = "^0.4.0"
 
 [build-system]
 requires = ["poetry-core"]

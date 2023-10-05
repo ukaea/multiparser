@@ -13,13 +13,15 @@ import multiparser
 
 
 @pytest.mark.monitor
-def test_run_on_directory_all() -> None:
+def test_run_on_directory_all(fake_log) -> None:
     _interval: float = 0.1
     with tempfile.TemporaryDirectory() as temp_d:
-        for _ in range(random.randint(2, 10)):
+        for _ in range(8):
             random.choice([fake_csv, fake_nml, fake_toml])(temp_d)
+        _log, _regex = fake_log
 
         def per_thread_callback(data, meta):
+            return
             print(
                 json.dumps(
                     {
@@ -35,6 +37,8 @@ def test_run_on_directory_all() -> None:
             per_thread_callback, interval=_interval
         ) as monitor:
             monitor.track(os.path.join(temp_d, "*"))
+            monitor.exclude(os.path.join(temp_d, "*.toml"))
+            monitor.tail(_log, _regex)
             monitor.run()
             for _ in range(10):
                 time.sleep(_interval)
@@ -62,7 +66,6 @@ def test_run_on_directory_filtered() -> None:
         to_nml(_nml_dict, _nml_file := os.path.join(temp_d, "nml_file.nml"))
 
         def per_thread_callback(data, meta):
-            return
             print(
                 json.dumps(
                     {

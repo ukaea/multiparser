@@ -1,5 +1,7 @@
 import os.path
 import tempfile
+import time
+import typing
 
 import pytest
 from conftest import fake_csv, fake_feather, fake_nml, fake_toml
@@ -54,3 +56,12 @@ def test_unrecognised_file_type() -> None:
             out_f.write("...")
         with pytest.raises(TypeError):
             mp_parse.record_file(temp_f.name, None, None)
+
+
+@pytest.mark.parsing
+def test_parse_log(
+    fake_log: typing.Tuple[str, typing.List[typing.Tuple[None, str]]]
+) -> None:
+    for _ in range(10):
+        time.sleep(0.1)
+        mp_parse.record_log(*fake_log)
