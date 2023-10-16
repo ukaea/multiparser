@@ -79,7 +79,7 @@ def record_toml(input_file: str) -> TimeStampedData:
 @meta_stamp_record
 def record_log(
     input_file: str,
-    tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] = None,
+    tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
     convert: bool = True,
 ) -> TimeStampedData:
     """Records latest line only"""
@@ -100,27 +100,35 @@ def record_log(
         return {}, {"line": _line}
 
     for label, regex in tracked_values:
-        if _results := regex.findall(_line):
-            for i, result in enumerate(_results):
-                if isinstance(result, tuple):
-                    if len(result) == 1:
-                        _value_str: str = result
-                        _label = f"{label}_{i}" if len(_results) > 1 else label
-                    elif len(result) == 2:
-                        _label, _value_str = result
-                    else:
-                        raise ValueError(
-                            f"Regex string '{regex}' with label assignment must return a value"
-                        )
-                else:
-                    if not label:
-                        if len(result) != 2:
-                            raise ValueError(
-                                f"Regex string '{regex}' without label assignment must return a key-value pair"
-                            )
-                        label, _value_str = result
+        if not (_results := regex.findall(_line)):
+            continue
 
-                _out_data[_label] = _converter(_value_str) if convert else _value_str
+        _multiple_results: bool = len(_results) > 1
+
+        for i, result in enumerate(_results):
+            if isinstance(result, tuple):
+                if len(result) == 1:
+                    if not label:
+                        raise ValueError(
+                            "Expected label for regex with only single matching entry"
+                        )
+                    _value_str: str = result[0]
+                    _label: str = label
+                elif len(result) == 2:
+                    _label, _value_str = result
+                else:
+                    raise ValueError(
+                        f"Regex string '{regex}' with label assignment must return a value"
+                    )
+            elif not label:
+                if len(result) != 2:
+                    raise ValueError(
+                        f"Regex string '{regex}' without label assignment must return a key-value pair"
+                    )
+                _label, _value_str = result
+
+            _label = f"{label}_{i}" if _multiple_results else _label
+            _out_data[_label] = _converter(_value_str) if convert else _value_str
     return {}, _out_data
 
 
@@ -140,7 +148,7 @@ def record_file(
     input_file: str, tracked_values: typing.List[typing.Pattern] | None
 ) -> TimeStampedData:
     _extension: str = os.path.splitext(input_file)[1].replace(".", "")
-    _tracked_vals: typing.List[str] | None = tracked_values or []
+    _tracked_vals: typing.List[typing.Pattern] | None = tracked_values or []
 
     for key, parser in SUFFIX_PARSERS.items():
         if _extension not in key:

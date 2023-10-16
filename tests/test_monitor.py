@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import random
 import re
@@ -13,7 +14,7 @@ from conftest import fake_csv, fake_nml, fake_toml, to_nml
 
 import multiparser
 import multiparser.exceptions as mp_exc
-import multiparser.parsing as mp_parse
+import multiparser.thread as mp_thread
 
 
 @pytest.mark.monitor
@@ -38,25 +39,33 @@ def test_run_on_directory_all(
             if exception == "file_thread_exception":
                 raise Exception("Oh dear!")
 
+        @mp_thread.abort_on_fail
+        def fail_run(*_):
+            raise AssertionError("Oh dear!")
+
+        if exception == "file_monitor_thread_exception":
+            mocker.patch.object(mp_thread.FileThreadLauncher, "run", fail_run)
+        elif exception == "log_monitor_thread_exception":
+            mocker.patch.object(mp_thread.FileThreadLauncher, "run", fail_run)
+
         with multiparser.FileMonitor(
-            per_thread_callback, interval=_interval
+            per_thread_callback, interval=_interval, log_level=logging.DEBUG
         ) as monitor:
 
-            def do_raise(*args, **kwargs):
-                raise Exception("Oh no!")
-
-            if exception == "file_monitor_thread_exception":
-                mocker.patch("multiparser.parsing.record_csv", do_raise)
-                mocker.patch("multiparser.parsing.record_toml", do_raise)
-            elif exception == "log_monitor_thread_exception":
-                mocker.patch("multiparser.parsing.record_log", do_raise)
             monitor.track(os.path.join(temp_d, "*"))
             monitor.exclude(os.path.join(temp_d, "*.toml"))
             monitor.tail(*fake_log)
             monitor.run()
             for _ in range(10):
                 time.sleep(_interval)
-            monitor.terminate()
+            if exception == "file_thread_exception":
+                with pytest.raises(mp_exc.SessionFailure):
+                    monitor.terminate()
+            elif exception and exception != "file_thread_exception":
+                with pytest.raises(AssertionError):
+                    monitor.terminate()
+            else:
+                monitor.terminate()
 
 
 @pytest.mark.monitor

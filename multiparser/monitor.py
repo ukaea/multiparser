@@ -1,10 +1,12 @@
 import glob
+import logging
 import re
+import sys
 import threading
-import time
 import typing
 
-import multiparser.exceptions as mp_exc
+import loguru
+
 import multiparser.thread as mp_thread
 from multiparser.typing import FullFileTrackedValue, LogFileRegexPair
 
@@ -16,6 +18,7 @@ class FileMonitor:
         self,
         per_thread_callback: typing.Callable,
         interval: float = 1e-3,
+        log_level: int | str = logging.INFO,
     ) -> None:
         """Create an instance of the file monitor for tracking file modifications.
 
@@ -36,6 +39,7 @@ class FileMonitor:
         """
         self._interval: float = interval
         self._per_thread_callback = per_thread_callback
+        self._file_threads_mutex = threading.Lock()
         self._complete = threading.Event()
         self._abort_file_monitors = threading.Event()
         self._known_files: typing.List[str] = []
@@ -45,6 +49,13 @@ class FileMonitor:
         self._file_monitor_thread: mp_thread.HandledThread | None = None
         self._log_monitor_thread: mp_thread.HandledThread | None = None
 
+        loguru.logger.add(
+            sys.stderr,
+            format="{level.icon} | <green>{elapsed}</green> | <level>{level: <8}</level> | <c>multiparse</c> | {message}",
+            colorize=True,
+            level=log_level,
+        )
+
     def _create_monitor_threads(self) -> None:
         def _full_file_monitor_func(
             glob_exprs: typing.List[FullFileTrackedValue],
@@ -52,20 +63,16 @@ class FileMonitor:
             termination_trigger: threading.Event = self._abort_file_monitors,
             interval: float = self._interval,
         ) -> None:
-            try:
-                _full_file_threads = mp_thread.FullFileThreadLauncher(
-                    trackables=glob_exprs,
-                    exclude_files_globex=exc_glob_exprs,
-                    refresh_interval=interval,
-                    file_list=self._known_files,
-                    file_thread_callback=self._per_thread_callback,
-                )
-                _full_file_threads.run()
-            except Exception as e:
-                termination_trigger.set()
-                raise e
-            while not termination_trigger.set():
-                time.sleep(interval)
+            _full_file_threads = mp_thread.FullFileThreadLauncher(
+                trackables=glob_exprs,
+                exclude_files_globex=exc_glob_exprs,
+                refresh_interval=interval,
+                file_list=self._known_files,
+                file_thread_callback=self._per_thread_callback,
+                file_thread_lock=self._file_threads_mutex,
+                file_thread_termination_trigger=termination_trigger,
+            )
+            _full_file_threads.run()
             _full_file_threads.abort()
 
         def _log_file_monitor_func(
@@ -74,31 +81,25 @@ class FileMonitor:
             termination_trigger: threading.Event = self._abort_file_monitors,
             interval: float = self._interval,
         ) -> None:
-            try:
-                _log_file_threads = mp_thread.LogFileThreadLauncher(
-                    trackables=glob_exprs,
-                    exclude_files_globex=exc_glob_exprs,
-                    refresh_interval=interval,
-                    file_list=self._known_files,
-                    file_thread_callback=self._per_thread_callback,
-                )
-            except Exception as e:
-                termination_trigger.set()
-                raise e
+            _log_file_threads = mp_thread.LogFileThreadLauncher(
+                trackables=glob_exprs,
+                exclude_files_globex=exc_glob_exprs,
+                refresh_interval=interval,
+                file_list=self._known_files,
+                file_thread_callback=self._per_thread_callback,
+                file_thread_lock=self._file_threads_mutex,
+                file_thread_termination_trigger=termination_trigger,
+            )
             _log_file_threads.run()
-            while not termination_trigger.set():
-                time.sleep(interval)
             _log_file_threads.abort()
 
         self._file_monitor_thread = mp_thread.HandledThread(
-            terminate_all_on_failure=True,
             task_identifier="Full File Monitor",
             target=_full_file_monitor_func,
             args=(self._file_globex, self._excluded_patterns),
         )
 
         self._log_monitor_thread = mp_thread.HandledThread(
-            terminate_all_on_failure=True,
             task_identifier="Log File Monitor",
             target=_log_file_monitor_func,
             args=(self._log_globex, self._excluded_patterns),
@@ -165,6 +166,12 @@ class FileMonitor:
         self._complete.set()
         self._file_monitor_thread.join()
         self._log_monitor_thread.join()
+
+        if (
+            _exception := self._file_monitor_thread.exception
+            or self._log_monitor_thread.exception
+        ):
+            raise _exception
 
     def run(self) -> None:
         self._file_monitor_thread.start()
