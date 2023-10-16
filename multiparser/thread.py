@@ -1,3 +1,20 @@
+"""
+Multiparser Threading
+=====================
+
+Contains methods and classes for the creation of threads towards the
+monitoring of output files. These are broken down into two types, log files
+which are files requiring only the read of the latest line, and full files
+which are defined as those requiring the whole file to be re-read on modification
+
+"""
+__date__ = "2023-10-16"
+__author__ = "Kristian Zarebski"
+__maintainer__ = "Kristian Zarebski"
+__email__ = "kristian.zarebski@ukaea.uk"
+__copyright__ = "Copyright 2023, United Kingdom Atomic Energy Authority"
+
+
 import datetime
 import functools
 import glob
@@ -14,20 +31,33 @@ from multiparser.typing import FullFileTrackedValue, LogFileRegexPair
 
 
 class HandledThread(threading.Thread):
+    """Thread with Exception capture
+
+    Extension to the built-in Thread type storing any exception
+    throw information so it can be handled
+    """
+
     def __init__(
         self,
-        terminate_all_on_failure: bool = False,
         task_identifier: str | None = None,
         *args,
         **kwargs,
     ) -> None:
-        self.terminate_all_on_failure: bool = terminate_all_on_failure
+        """Initialise a thread with exception capture.
+
+        Parameters
+        ----------
+        task_identifier : str | None, optional
+            a unique identifier for this thread, by default None
+        """
         self.task_description: str | None = task_identifier
         self.exception: BaseException | None = None
         super().__init__(*args, **kwargs)
         self._wrap_target()
 
     def _wrap_target(self) -> None:
+        """Wrap the thread target in order to store any exception throws"""
+
         def wrapper(func: typing.Callable) -> typing.Callable:
             def _inner(*args, **kwargs) -> typing.Any:
                 try:
@@ -40,7 +70,23 @@ class HandledThread(threading.Thread):
         self._target: typing.Callable = wrapper(self._target)
 
 
-def abort_on_fail(function: typing.Callable) -> typing.Callable:
+def _abort_on_fail(function: typing.Callable) -> typing.Callable:
+    """Decorator for setting termination event variable on failure.
+
+    A decorator has been used to assist testing of the underlying
+    functionality of the file thread launcher super-class.
+
+    Parameters
+    ----------
+    function : typing.Callable
+        the class method to trigger thread termination on failure
+
+    Returns
+    -------
+    typing.Callable
+        modified method
+    """
+
     @functools.wraps(function)
     def _wrapper(self: "FileThreadLauncher", *args, **kwargs) -> typing.Any:
         try:
@@ -53,23 +99,58 @@ def abort_on_fail(function: typing.Callable) -> typing.Callable:
 
 
 class FileThreadLauncher:
+    """Base class for all file monitor thread launchers.
+
+    Spins up threads whenever a new file matching a given set of globular
+    expressions is created in order to monitor any changes to that file.
+    """
+
     def __init__(
         self,
         file_thread_callback: typing.Callable,
-        file_thread_lock: threading.Lock,
         file_thread_termination_trigger: threading.Event,
         parsing_callback: typing.Callable,
         notification_callback: typing.Callable,
         refresh_interval: float,
         trackables: typing.List[LogFileRegexPair | FullFileTrackedValue],
         exclude_files_globex: typing.List[str] | None,
+        file_thread_lock: threading.Lock | None = None,
         file_list: typing.List[str] | None = None,
     ) -> None:
+        """Create a new instance of the file monitor thread launcher.
+
+        Parameters
+        ----------
+        file_thread_callback : typing.Callable
+            the callback function to be triggered whenever a change is detected
+            to a monitored file
+        file_thread_termination_trigger : threading.Event
+            threading event which when set will trigger termination of all file
+            monitor loops
+        parsing_callback : typing.Callable
+            function to be called to parse the monitored files
+        notification_callback : typing.Callable
+            function called to notify when a new file is detected
+        refresh_interval : float
+            how often to check for new files
+        trackables : typing.List[LogFileRegexPair  |  FullFileTrackedValue]
+            a tuple containing:
+                - globular expression for file capture
+                - regular_expressions for variable tracking within files
+                - whether the file is static (written once) or changing
+        exclude_files_globex : typing.List[str] | None
+            a list of globular expressions for files to exclude
+        file_list : typing.List[str] | None, optional
+            container to append any found file names, by default None
+        file_thread_lock : threading.Lock, optional
+            shared mutex to prevent the callback being called simultaneously by
+            multiple threads.
+        """
         self._trackables: typing.List[
             LogFileRegexPair | FullFileTrackedValue
         ] = trackables
         self._per_thread_callback: typing.Callable = file_thread_callback
-        self._lock: threading.Lock = file_thread_lock
+        self._lock: threading.Lock | None = file_thread_lock
         self._termination_trigger: threading.Event = file_thread_termination_trigger
         self._parsing_callback: typing.Callable = parsing_callback
         self._notifier: typing.Callable = notification_callback
@@ -80,8 +161,23 @@ class FileThreadLauncher:
         self._monitored_files = file_list or []
 
     def _append_thread(
-        self, file_name: str, tracked_values: LogFileRegexPair | FullFileTrackedValue
+        self,
+        file_name: str,
+        tracked_values: LogFileRegexPair | FullFileTrackedValue,
+        static: bool = False,
     ) -> None:
+        """Create a new thread for a monitored file
+
+        Parameters
+        ----------
+        file_name : str
+            name of the file to observe
+        tracked_values : LogFileRegexPair | FullFileTrackedValue
+            values to monitor within the given file
+        static : bool, optional
+            whether the file is written only once, by default False
+        """
+
         def _read_action(
             monitor_callback: typing.Callable = self._per_thread_callback,
             file_name: str = file_name,
@@ -89,7 +185,8 @@ class FileThreadLauncher:
             records: typing.List[typing.Tuple[str, str]] = self._records,
             interval: float = self._interval,
             tracked_vals: LogFileRegexPair | FullFileTrackedValue = tracked_values,
-            lock: threading.Lock = self._lock,
+            lock: threading.Lock | None = self._lock,
+            static_read: bool = static,
         ) -> None:
             while not termination_trigger.is_set():
                 time.sleep(interval)
@@ -109,28 +206,49 @@ class FileThreadLauncher:
 
                 _meta, _data = self._parsing_callback(file_name, tracked_vals)
 
-                with lock:
+                if lock:
+                    with lock:
+                        monitor_callback(_data, _meta)
+                else:
                     monitor_callback(_data, _meta)
+
                 records.append((_modified_time, file_name))
+
+                # If only a single read is requirement terminate loop
+                if static_read:
+                    break
 
         self._file_threads[file_name] = HandledThread(target=_read_action)
 
-    @abort_on_fail
+    @_abort_on_fail
     def run(self) -> None:
+        """Start the thread launcher"""
         while not self._termination_trigger.is_set():
             time.sleep(self._interval)
             _excludes: typing.List[str] = []
             for expr in self._exclude_globex or []:
                 _excludes += glob.glob(expr)
-            for expr, tracked_values in self._trackables:
+            for expr, tracked_values, static in self._trackables:
                 for file in glob.glob(expr):
                     if file not in self._file_threads and file not in _excludes:
                         self._notifier(file)
                         self._monitored_files.append(file)
-                        self._append_thread(file, tracked_values)
+                        self._append_thread(file, tracked_values, static)
                         self._file_threads[file].start()
 
     def _raise_exceptions(self) -> None:
+        """Raise an exception summarising exception throws in all threads.
+
+        Assembles the exception information for all threads within the
+        file thread launcher and then raises a session exception. This means
+        the failure of monitoring of a file will not interrupt monitoring of
+        other files.
+
+        Raises
+        ------
+        mp_exc.SessionFailure
+            an exception summarising all thread failures
+        """
         if not any(
             (
                 _exceptions := {
@@ -147,16 +265,46 @@ class FileThreadLauncher:
 
 
 class LogFileThreadLauncher(FileThreadLauncher):
+    """Create a file thread launcher for tailing files.
+
+    This class focuses on the monitoring of log files whereby only
+    the latest line or group of lines requires monitoring.
+    """
+
     def __init__(
         self,
         trackables: typing.List[LogFileRegexPair],
         file_thread_callback: typing.Callable,
-        file_thread_lock: threading.Lock,
         file_thread_termination_trigger: threading.Event,
         refresh_interval: float,
         exclude_files_globex: typing.List[str] | None,
         file_list: typing.List[str] | None = None,
+        file_thread_lock: threading.Lock | None = None,
     ) -> None:
+        """Initialise a log file monitor thread launcher.
+
+        Parameters
+        ----------
+        trackables : typing.List[LogFileRegexPair]
+            list of tuples containing:
+                - globular expressions of files to monitor
+                - regex defining the variables to track
+                - whether the file is static (written once) or changing.
+        file_thread_callback : typing.Callable
+            the function to call when a file is modified
+        file_thread_termination_trigger : threading.Event
+            threading event which when set will trigger termination of all file
+            monitor loops
+        refresh_interval : float
+            how often to check for new files
+        exclude_files_globex : typing.List[str] | None
+            a list of globular expressions for files to exclude
+        file_list : typing.List[str] | None, optional
+            container to append any found file names, by default None
+        file_thread_lock : threading.Lock, optional
+            shared mutex to prevent the callback being called simultaneously by
+            multiple threads.
+        """
 
         super().__init__(
             file_thread_callback=file_thread_callback,
@@ -174,9 +322,15 @@ class LogFileThreadLauncher(FileThreadLauncher):
 
 
 class FullFileThreadLauncher(FileThreadLauncher):
+    """Create a file thread launcher for full files.
+
+    This class focuses on the monitoring of full files whereby the
+    whole file content is read each time the file is modified.
+    """
+
     def __init__(
         self,
-        trackables: typing.List[LogFileRegexPair],
+        trackables: typing.List[FullFileTrackedValue],
         file_thread_callback: typing.Callable,
         file_thread_lock: threading.Lock,
         file_thread_termination_trigger: threading.Event,
@@ -184,6 +338,30 @@ class FullFileThreadLauncher(FileThreadLauncher):
         exclude_files_globex: typing.List[str] | None,
         file_list: typing.List[str] | None = None,
     ) -> None:
+        """Initialise a full file monitor thread launcher.
+
+        Parameters
+        ----------
+        trackables : typing.List[FullFileTrackedValue]
+            list of tuples containing:
+                - globular expressions of files to monitor
+                - regex defining the variables to track
+                - whether the file is static (written once) or changing.
+        file_thread_callback : typing.Callable
+            the function to call when a file is modified
+        file_thread_termination_trigger : threading.Event
+            threading event which when set will trigger termination of all file
+            monitor loops
+        refresh_interval : float
+            how often to check for new files
+        exclude_files_globex : typing.List[str] | None
+            a list of globular expressions for files to exclude
+        file_list : typing.List[str] | None, optional
+            container to append any found file names, by default None
+        file_thread_lock : threading.Lock, optional
+            shared mutex to prevent the callback being called simultaneously by
+            multiple threads.
+        """
 
         super().__init__(
             file_thread_callback=file_thread_callback,
