@@ -61,7 +61,9 @@ class FileMonitor:
         """
         self._interval: float = interval
         self._per_thread_callback = per_thread_callback
-        self._file_threads_mutex = threading.Lock()
+        self._file_threads_mutex: threading.Lock | None = (
+            threading.Lock() if lock_callback else None
+        )
         self._complete = threading.Event()
         self._abort_file_monitors = threading.Event()
         self._known_files: typing.List[str] = []

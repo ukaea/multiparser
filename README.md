@@ -9,18 +9,27 @@ For example, in the case where a set of model outputs were written to a set of f
 The main component of _Multiparser_ is the `FileMonitor` class which is a context manager. Files are individually "tracked" with the option to filter by value names or regular expressions. These files are read as a whole, suitable for files such as JSON and TOML:
 
 ```python
-with FileMonitor(per_thread_callback=callback_function, interval=10.0) as monitor:
+with FileMonitor(
+    per_thread_callback=callback_function,
+    lock_callback=True
+    interval=10.0,
+) as monitor:
     monitor.track(
         path_glob_exprs=["file_of_interest.toml", "out_dir/*.other"],
         tracked_values=[
             "list", "of", "interesting", "values",
             r"^list", r"of\s", r"regular", r"Expressions"
-        ]
+        ],
+        static=True
     )
     monitor.run()
     ...
     monitor.terminate()
 ```
+
+The `lock_callback` option here ensures only one thread can execute the callback triggered
+when a file is monitored at a time. The argument `static` tells the file monitor that once
+the file appears, it will not be modified again so the monitoring can terminate.
 
 For "tailing" files such as logs the `tail` method is used, regular expressions can be optionally specified to extract particular values (see section below). Where there are two capture groups the label for the parameter is taken to be the
 first match in the group. These labels can be overwritten using the `labels` argument, if `None` is passed as one of the labels then it is assumed the label will be extracted via regex for that particular entry:
