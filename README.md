@@ -11,7 +11,7 @@ The main component of _Multiparser_ is the `FileMonitor` class which is a contex
 ```python
 with FileMonitor(
     per_thread_callback=callback_function,
-    lock_callback=True
+    lock_callback=True,
     interval=10.0,
 ) as monitor:
     monitor.track(
@@ -27,9 +27,7 @@ with FileMonitor(
     monitor.terminate()
 ```
 
-The `lock_callback` option here ensures only one thread can execute the callback triggered
-when a file is monitored at a time. The argument `static` tells the file monitor that once
-the file appears, it will not be modified again so the monitoring can terminate.
+The `lock_callback` option on the `FileMonitor` instance ensures only one thread can execute the callback triggered when a file is monitored at a time. The argument `static` for the `track` method tells the file monitor that once the file appears, it will not be modified again so the monitoring can terminate.
 
 For "tailing" files such as logs the `tail` method is used, regular expressions can be optionally specified to extract particular values (see section below). Where there are two capture groups the label for the parameter is taken to be the
 first match in the group. These labels can be overwritten using the `labels` argument, if `None` is passed as one of the labels then it is assumed the label will be extracted via regex for that particular entry:
