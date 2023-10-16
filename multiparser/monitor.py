@@ -1,18 +1,14 @@
-import datetime
 import glob
-import os.path
+import re
 import threading
 import time
 import typing
 
-import loguru
-
-import multiparser.parsing as cc_parse
+import multiparser.exceptions as mp_exc
+import multiparser.thread as mp_thread
+from multiparser.typing import FullFileTrackedValue, LogFileRegexPair
 
 __all__ = ["FileMonitor"]
-
-LogFileRegexPair = typing.Tuple[str, typing.List[typing.Tuple[str | None, str]]]
-FullFileTrackedValue = typing.Tuple[str, typing.List[str]]
 
 
 class FileMonitor:
@@ -20,7 +16,6 @@ class FileMonitor:
         self,
         per_thread_callback: typing.Callable,
         interval: float = 1e-3,
-        log_level: str = "INFO",
     ) -> None:
         """Create an instance of the file monitor for tracking file modifications.
 
@@ -42,142 +37,71 @@ class FileMonitor:
         self._interval: float = interval
         self._per_thread_callback = per_thread_callback
         self._complete = threading.Event()
+        self._abort_file_monitors = threading.Event()
         self._known_files: typing.List[str] = []
-        self._threads: typing.Dict[str | None, threading.Thread] = {}
-        self._records: typing.List[typing.Tuple[str, str]] = []
         self._file_globex: typing.List[FullFileTrackedValue] = []
         self._log_globex: typing.List[LogFileRegexPair] = []
         self._excluded_patterns: typing.List[str] = []
-
-    def _append_thread(
-        self,
-        file_name: str,
-        tracked_values: typing.List[FullFileTrackedValue] | None = None,
-        log_regular_expressions: typing.List[LogFileRegexPair] | None = None,
-    ) -> None:
-        def _read_action(
-            callback: typing.Callable,
-            file_name: str,
-            termination_trigger: threading.Event,
-            tracked_vals: typing.List[str] | None,
-            line_regex: typing.List[typing.Tuple[str | None, str]] | None,
-            interval: float,
-            log: bool = False,
-        ) -> None:
-            while not termination_trigger.is_set():
-                time.sleep(interval)
-
-                # If the file does not exist yet then continue
-                if not os.path.exists(file_name):
-                    continue
-
-                _modified_time_stamp = os.path.getmtime(file_name)
-                _modified_time = datetime.datetime.fromtimestamp(
-                    _modified_time_stamp
-                ).strftime("%Y-%M-%d %H:%M:%S.%f")
-
-                # If the file has not been modified then we do not need to parse it
-                if (_modified_time, file_name) in self._records:
-                    continue
-
-                if not log:
-                    _meta, _data = cc_parse.record_file(file_name, tracked_vals)
-                else:
-                    _meta, _data = cc_parse.record_log(file_name, line_regex)
-
-                callback(_data, _meta)
-                self._records.append((_modified_time, file_name))
-
-        self._threads[file_name] = threading.Thread(
-            target=_read_action,
-            args=(
-                self._per_thread_callback,
-                file_name,
-                self._complete,
-                tracked_values,
-                log_regular_expressions,
-                self._interval,
-                log_regular_expressions is not None,
-            ),
-        )
+        self._file_monitor_thread: mp_thread.HandledThread | None = None
+        self._log_monitor_thread: mp_thread.HandledThread | None = None
 
     def _create_monitor_threads(self) -> None:
         def _full_file_monitor_func(
             glob_exprs: typing.List[FullFileTrackedValue],
             exc_glob_exprs: typing.List[str],
-            thread_launch_func: typing.Callable,
-            threads: typing.Dict[str | None, threading.Thread],
-            termination_trigger: threading.Event,
-            interval: float,
-            file_list: typing.List[str],
-            message_callback: typing.Callable = lambda item: loguru.logger.info(
-                f"Found NEW file '{item}'"
-            ),
+            termination_trigger: threading.Event = self._abort_file_monitors,
+            interval: float = self._interval,
         ) -> None:
-            while not termination_trigger.is_set():
+            try:
+                _full_file_threads = mp_thread.FullFileThreadLauncher(
+                    trackables=glob_exprs,
+                    exclude_files_globex=exc_glob_exprs,
+                    refresh_interval=interval,
+                    file_list=self._known_files,
+                    file_thread_callback=self._per_thread_callback,
+                )
+                _full_file_threads.run()
+            except Exception as e:
+                termination_trigger.set()
+                raise e
+            while not termination_trigger.set():
                 time.sleep(interval)
-                _excludes: typing.List[str] = []
-                for expr in exc_glob_exprs:
-                    _excludes += glob.glob(expr)
-                for expr, tracked_values in glob_exprs:
-                    for file in glob.glob(expr):
-                        if file not in threads and file not in _excludes:
-                            message_callback(file)
-                            file_list.append(file)
-                            thread_launch_func(file, tracked_values=tracked_values)
-                            threads[file].start()
+            _full_file_threads.abort()
 
-        def _file_tail_monitor_func(
-            glob_exprs: typing.List[LogFileRegexPair],
+        def _log_file_monitor_func(
+            glob_exprs: typing.List[FullFileTrackedValue],
             exc_glob_exprs: typing.List[str],
-            thread_launch_func: typing.Callable,
-            threads: typing.Dict[str | None, threading.Thread],
-            termination_trigger: threading.Event,
-            interval: float,
-            file_list: typing.List[str],
-            message_callback: typing.Callable = lambda item: loguru.logger.info(
-                f"Found NEW log '{item}'"
-            ),
+            termination_trigger: threading.Event = self._abort_file_monitors,
+            interval: float = self._interval,
         ) -> None:
-            while not termination_trigger.is_set():
+            try:
+                _log_file_threads = mp_thread.LogFileThreadLauncher(
+                    trackables=glob_exprs,
+                    exclude_files_globex=exc_glob_exprs,
+                    refresh_interval=interval,
+                    file_list=self._known_files,
+                    file_thread_callback=self._per_thread_callback,
+                )
+            except Exception as e:
+                termination_trigger.set()
+                raise e
+            _log_file_threads.run()
+            while not termination_trigger.set():
                 time.sleep(interval)
-                _excludes: typing.List[str] = []
-                for expr in exc_glob_exprs:
-                    _excludes += glob.glob(expr)
-                for expr, reg_lab_expr_pairing in glob_exprs:
-                    for file in glob.glob(expr):
-                        if file not in threads and file not in _excludes:
-                            message_callback(file)
-                            file_list.append(file)
-                            thread_launch_func(
-                                file, log_regular_expressions=reg_lab_expr_pairing
-                            )
-                            threads[file].start()
+            _log_file_threads.abort()
 
-        self._threads["__FULL_FILE_MONITOR__"] = threading.Thread(
+        self._file_monitor_thread = mp_thread.HandledThread(
+            terminate_all_on_failure=True,
+            task_identifier="Full File Monitor",
             target=_full_file_monitor_func,
-            args=(
-                self._file_globex,
-                self._excluded_patterns,
-                self._append_thread,
-                self._threads,
-                self._complete,
-                self._interval,
-                self._known_files,
-            ),
+            args=(self._file_globex, self._excluded_patterns),
         )
 
-        self._threads["__LOG_FILE_MONITOR__"] = threading.Thread(
-            target=_file_tail_monitor_func,
-            args=(
-                self._log_globex,
-                self._excluded_patterns,
-                self._append_thread,
-                self._threads,
-                self._complete,
-                self._interval,
-                self._known_files,
-            ),
+        self._log_monitor_thread = mp_thread.HandledThread(
+            terminate_all_on_failure=True,
+            task_identifier="Log File Monitor",
+            target=_log_file_monitor_func,
+            args=(self._log_globex, self._excluded_patterns),
         )
 
     def exclude(self, path_glob_exprs: typing.List[str] | str) -> None:
@@ -186,15 +110,25 @@ class FileMonitor:
         else:
             self._excluded_patterns += path_glob_exprs
 
+        # Check globular expressions before passing them to thread
+        for expression in self._excluded_patterns:
+            glob.glob(expression)
+
     def track(
         self,
         path_glob_exprs: typing.List[str] | str,
         tracked_values: typing.List[str] | None = None,
     ) -> None:
+        if tracked_values:
+            tracked_values = [re.compile(t, re.IGNORECASE) for t in tracked_values]
         if isinstance(path_glob_exprs, str):
             self._file_globex.append((path_glob_exprs, tracked_values))
         else:
             self._file_globex += [(g, tracked_values) for g in path_glob_exprs]
+
+        # Check globular expressions before passing them to thread
+        for expression in self._file_globex:
+            glob.glob(expression[0])
 
     def tail(
         self,
@@ -208,8 +142,11 @@ class FileMonitor:
             )
         if regular_exprs:
             labels = labels or [None] * len(regular_exprs)
-            _reg_lab_expr_pairing: typing.List[typing.Tuple[str | None, str]] | None = [
-                (label, reg_ex) for label, reg_ex in zip(labels, regular_exprs)
+            _reg_lab_expr_pairing: typing.List[
+                typing.Tuple[str | None, typing.Pattern]
+            ] | None = [
+                (label, re.compile(reg_ex, re.IGNORECASE))
+                for label, reg_ex in zip(labels, regular_exprs)
             ]
         else:
             _reg_lab_expr_pairing = None
@@ -219,14 +156,19 @@ class FileMonitor:
         else:
             self._log_globex += [(g, _reg_lab_expr_pairing) for g in path_glob_exprs]
 
+        # Check globular expressions before passing them to thread
+        for expression in self._log_globex:
+            glob.glob(expression[0])
+
     def terminate(self) -> None:
+        self._abort_file_monitors.set()
         self._complete.set()
-        for thread in self._threads.values():
-            thread.join()
+        self._file_monitor_thread.join()
+        self._log_monitor_thread.join()
 
     def run(self) -> None:
-        self._threads["__FULL_FILE_MONITOR__"].start()
-        self._threads["__LOG_FILE_MONITOR__"].start()
+        self._file_monitor_thread.start()
+        self._log_monitor_thread.start()
 
     def __enter__(self) -> "FileMonitor":
         self._create_monitor_threads()

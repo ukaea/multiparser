@@ -1,4 +1,5 @@
 import os.path
+import re
 import tempfile
 import time
 import typing
@@ -62,6 +63,8 @@ def test_unrecognised_file_type() -> None:
 def test_parse_log(
     fake_log: typing.Tuple[str, typing.List[typing.Tuple[None, str]]]
 ) -> None:
+    _file, _regex, _labels = fake_log
+    _regex_pairs = [(i, re.compile(j)) for i, j in zip(_labels, _regex)]
     for _ in range(10):
         time.sleep(0.1)
-        mp_parse.record_log(*fake_log)
+        mp_parse.record_log(_file, _regex_pairs)

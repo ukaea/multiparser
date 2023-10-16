@@ -21,6 +21,7 @@ pytest = "^7.4.2"
 pytest-sugar = "^0.9.7"
 pytest-cov = "^4.1.0"
 xeger = "^0.4.0"
+pytest-mock = "^3.11.1"
 
 [build-system]
 requires = ["poetry-core"]

@@ -4,7 +4,6 @@ import json
 import os.path
 import pickle
 import platform
-import re
 import typing
 
 import f90nml
@@ -80,7 +79,7 @@ def record_toml(input_file: str) -> TimeStampedData:
 @meta_stamp_record
 def record_log(
     input_file: str,
-    regex_items: typing.List[typing.Tuple[str | None, str]] = None,
+    tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] = None,
     convert: bool = True,
 ) -> TimeStampedData:
     """Records latest line only"""
@@ -97,17 +96,13 @@ def record_log(
 
     _line = sh.tail(f"-1", input_file)
 
-    if not regex_items:
+    if not tracked_values:
         return {}, {"line": _line}
 
-    for label, regex in regex_items:
-        if _results := re.findall(regex, _line):
+    for label, regex in tracked_values:
+        if _results := regex.findall(_line):
             for i, result in enumerate(_results):
-                if not label and len(result) != 2:
-                    raise ValueError(
-                        f"Regex string '{regex}' without label assignment must return a key-value pair"
-                    )
-                else:
+                if isinstance(result, tuple):
                     if len(result) == 1:
                         _value_str: str = result
                         _label = f"{label}_{i}" if len(_results) > 1 else label
@@ -117,6 +112,14 @@ def record_log(
                         raise ValueError(
                             f"Regex string '{regex}' with label assignment must return a value"
                         )
+                else:
+                    if not label:
+                        if len(result) != 2:
+                            raise ValueError(
+                                f"Regex string '{regex}' without label assignment must return a key-value pair"
+                            )
+                        label, _value_str = result
+
                 _out_data[_label] = _converter(_value_str) if convert else _value_str
     return {}, _out_data
 
@@ -134,10 +137,10 @@ SUFFIX_PARSERS: typing.Dict[typing.Tuple[str, ...], typing.Callable] = {
 
 
 def record_file(
-    input_file: str, tracked_values: typing.List[str] | None
+    input_file: str, tracked_values: typing.List[typing.Pattern] | None
 ) -> TimeStampedData:
     _extension: str = os.path.splitext(input_file)[1].replace(".", "")
-    _tracked_vals: typing.List[str] | None = [i.lower() for i in tracked_values or []]
+    _tracked_vals: typing.List[str] | None = tracked_values or []
 
     for key, parser in SUFFIX_PARSERS.items():
         if _extension not in key:
@@ -150,9 +153,7 @@ def record_file(
         _out_data: typing.Dict[str, typing.Any] = {}
 
         for reg_ex in tracked_values or []:
-            _out_data |= {
-                k: v for k, v in _parsed_data[1].items() if re.findall(reg_ex, k)
-            }
+            _out_data |= {k: v for k, v in _parsed_data[1].items() if reg_ex.findall(k)}
 
         return _parsed_data[0], _out_data
 

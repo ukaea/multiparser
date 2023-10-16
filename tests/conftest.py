@@ -94,5 +94,5 @@ def fake_log() -> typing.Tuple[str, typing.List[typing.Tuple[None, str]]]:
             target=_write_dummy_data, args=(temp_f.name,)
         )
         _process.start()
-        yield temp_f.name, [(None, _rand_regex_1), (None, _rand_regex_2)]
+        yield temp_f.name, (_rand_regex_1, _rand_regex_2), (None, None)
         _process.join()
