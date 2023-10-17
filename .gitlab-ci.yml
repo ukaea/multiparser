@@ -1,6 +1,7 @@
 stages:
   - Install
   - Testing and Quality
+  - SonarQube
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
@@ -69,7 +70,7 @@ Security:
 
 
 sonarqube-check:
-  stage: Code Quality
+  stage: SonarQube
   image:
     name: sonarsource/sonar-scanner-cli:latest
     entrypoint: [""]
