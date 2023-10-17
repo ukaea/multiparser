@@ -23,6 +23,10 @@ pytest-cov = "^4.1.0"
 xeger = "^0.4.0"
 pytest-mock = "^3.11.1"
 
+
+[tool.poetry.group.quality.dependencies]
+bandit = "^1.7.5"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

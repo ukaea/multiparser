@@ -1,6 +1,6 @@
 stages:
   - Install
-  - Unit Testing
+  - Testing and Quality
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
@@ -39,8 +39,52 @@ Build Virtual Environment:
     - poetry config virtualenvs.in-project true
 
 Unit Tests:
-  stage: Unit Testing
+  stage: Testing and Quality
   <<: *setup_unit
   script:
     - poetry config virtualenvs.in-project true
     - poetry run pytest tests
+  artifacts:
+    untracked: false
+    expire_in: "1 hr"
+    paths:
+      - "coverage*"
+
+
+Security:
+  stage: Testing and Quality
+  <<: *setup_unit
+  allow_failure: true
+  script:
+    - poetry run bandit -r apecs -lll -v
+    - poetry run bandit -r apecs -lll -f json -o bandit.json
+  artifacts:
+    untracked: false
+    expire_in: "1 hr"
+    paths:
+      - "bandit.json"
+  except:
+      - tags
+
+
+
+sonarqube-check:
+  stage: Code Quality
+  image:
+    name: sonarsource/sonar-scanner-cli:latest
+    entrypoint: [""]
+  needs: ["Security", "Unit Tests"]
+  variables:
+    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"  # Defines the location of the analysis task cache
+    GIT_DEPTH: "0"  # Tells git to fetch all the branches of the project, required by the analysis task
+  cache:
+    key: "${CI_JOB_NAME}"
+    paths:
+      - .sonar/cache
+  script:
+    - pip install coverage
+    - coverage xml
+    - sonar-scanner
+  allow_failure: true
+  only:
+    - main
