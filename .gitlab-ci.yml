@@ -57,8 +57,8 @@ Security:
   <<: *setup_unit
   allow_failure: true
   script:
-    - poetry run bandit -r apecs -lll -v
-    - poetry run bandit -r apecs -lll -f json -o bandit.json
+    - poetry run bandit -r multiparser -lll -v
+    - poetry run bandit -r multiparser -lll -f json -o bandit.json
   artifacts:
     untracked: false
     expire_in: "1 hr"
