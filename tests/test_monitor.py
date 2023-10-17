@@ -37,15 +37,16 @@ def test_run_on_directory_all(
 
         def per_thread_callback(data, meta, exception=exception):
             if exception == "file_thread_exception":
-                raise Exception("Oh dear!")
+                raise TypeError("Oh dear!")
 
         @mp_thread.abort_on_fail
         def fail_run(*_):
             raise AssertionError("Oh dear!")
 
-        if exception == "file_monitor_thread_exception":
-            mocker.patch.object(mp_thread.FileThreadLauncher, "run", fail_run)
-        elif exception == "log_monitor_thread_exception":
+        if exception in (
+            "file_monitor_thread_exception",
+            "log_monitor_thread_exception",
+        ):
             mocker.patch.object(mp_thread.FileThreadLauncher, "run", fail_run)
 
         with multiparser.FileMonitor(

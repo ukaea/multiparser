@@ -70,7 +70,7 @@ class HandledThread(threading.Thread):
         self._target: typing.Callable = wrapper(self._target)
 
 
-def _abort_on_fail(function: typing.Callable) -> typing.Callable:
+def abort_on_fail(function: typing.Callable) -> typing.Callable:
     """Decorator for setting termination event variable on failure.
 
     A decorator has been used to assist testing of the underlying
@@ -114,7 +114,7 @@ class FileThreadLauncher:
         refresh_interval: float,
         trackables: typing.List[LogFileRegexPair | FullFileTrackedValue],
         exclude_files_globex: typing.List[str] | None,
-        file_thread_lock: threading.Lock | None = None,
+        file_thread_lock: typing.Any | None = None,
         file_list: typing.List[str] | None = None,
     ) -> None:
         """Create a new instance of the file monitor thread launcher.
@@ -150,7 +150,7 @@ class FileThreadLauncher:
             LogFileRegexPair | FullFileTrackedValue
         ] = trackables
         self._per_thread_callback: typing.Callable = file_thread_callback
-        self._lock: threading.Lock | None = file_thread_lock
+        self._lock: typing.Any | None = file_thread_lock
         self._termination_trigger: threading.Event = file_thread_termination_trigger
         self._parsing_callback: typing.Callable = parsing_callback
         self._notifier: typing.Callable = notification_callback
@@ -185,9 +185,12 @@ class FileThreadLauncher:
             records: typing.List[typing.Tuple[str, str]] = self._records,
             interval: float = self._interval,
             tracked_vals: LogFileRegexPair | FullFileTrackedValue = tracked_values,
-            lock: threading.Lock | None = self._lock,
+            lock: typing.Any | None = self._lock,
             static_read: bool = static,
         ) -> None:
+
+            _cached_metadata: typing.Dict[str, str | int] = {}
+
             while not termination_trigger.is_set():
                 time.sleep(interval)
 
@@ -204,13 +207,23 @@ class FileThreadLauncher:
                 if (_modified_time, file_name) in records:
                     continue
 
-                _meta, _data = self._parsing_callback(file_name, tracked_vals)
+                # Pass previous cached metadata to the parser in case required
+                _parsed = self._parsing_callback(
+                    file_name, tracked_vals, **_cached_metadata
+                )
 
-                if lock:
-                    with lock:
+                # Some parsers return multiple results, e.g. those parsing multiple file lines
+                _parsed_list = [_parsed] if not isinstance(_parsed, list) else _parsed
+
+                for _meta, _data in _parsed_list:
+                    if lock:
+                        with lock:
+                            monitor_callback(_data, _meta)
+                    else:
                         monitor_callback(_data, _meta)
-                else:
-                    monitor_callback(_data, _meta)
+
+                    # Keep latest
+                    _cached_metadata = _meta
 
                 records.append((_modified_time, file_name))
 
@@ -220,7 +233,7 @@ class FileThreadLauncher:
 
         self._file_threads[file_name] = HandledThread(target=_read_action)
 
-    @_abort_on_fail
+    @abort_on_fail
     def run(self) -> None:
         """Start the thread launcher"""
         while not self._termination_trigger.is_set():
@@ -279,7 +292,7 @@ class LogFileThreadLauncher(FileThreadLauncher):
         refresh_interval: float,
         exclude_files_globex: typing.List[str] | None,
         file_list: typing.List[str] | None = None,
-        file_thread_lock: threading.Lock | None = None,
+        file_thread_lock: typing.Any | None = None,
     ) -> None:
         """Initialise a log file monitor thread launcher.
 

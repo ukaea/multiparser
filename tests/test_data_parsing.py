@@ -56,7 +56,7 @@ def test_unrecognised_file_type() -> None:
         with open(temp_f.name, "w") as out_f:
             out_f.write("...")
         with pytest.raises(TypeError):
-            mp_parse.record_file(temp_f.name, None, None)
+            mp_parse.record_file(temp_f.name, None)
 
 
 @pytest.mark.parsing
