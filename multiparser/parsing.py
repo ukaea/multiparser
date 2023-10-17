@@ -40,7 +40,7 @@ def meta_stamp_record(parser: typing.Callable) -> typing.Callable:
         _meta_data: typing.Dict[str, str] = {
             "timestamp": datetime.datetime.fromtimestamp(
                 os.path.getmtime(input_file)
-            ).strftime("%Y-%M-%d %H:%M:%S.%f"),
+            ).strftime("%Y-%m-%d %H:%M:%S.%f"),
             "hostname": platform.node(),
             "file_name": input_file,
         }
