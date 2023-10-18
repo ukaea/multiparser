@@ -165,6 +165,8 @@ class FileThreadLauncher:
         file_name: str,
         tracked_values: LogFileRegexPair | FullFileTrackedValue,
         static: bool = False,
+        custom_parser: typing.Callable | None = None,
+        **_,
     ) -> None:
         """Create a new thread for a monitored file
 
@@ -209,7 +211,7 @@ class FileThreadLauncher:
 
                 # Pass previous cached metadata to the parser in case required
                 _parsed = self._parsing_callback(
-                    file_name, tracked_vals, **_cached_metadata
+                    file_name, tracked_vals, custom_parser, **_cached_metadata
                 )
 
                 # Some parsers return multiple results, e.g. those parsing multiple file lines
@@ -241,12 +243,12 @@ class FileThreadLauncher:
             _excludes: typing.List[str] = []
             for expr in self._exclude_globex or []:
                 _excludes += glob.glob(expr)
-            for expr, tracked_values, static in self._trackables:
-                for file in glob.glob(expr):
+            for trackable in self._trackables:
+                for file in glob.glob(trackable["glob_exprs"]):
                     if file not in self._file_threads and file not in _excludes:
                         self._notifier(file)
                         self._monitored_files.append(file)
-                        self._append_thread(file, tracked_values, static)
+                        self._append_thread(file, **trackable)
                         self._file_threads[file].start()
 
     def _raise_exceptions(self) -> None:
@@ -267,6 +269,7 @@ class FileThreadLauncher:
                 _exceptions := {
                     name: thread.exception
                     for name, thread in self._file_threads.items()
+                    if thread.exception
                 }
             ).values()
         ):
@@ -356,9 +359,10 @@ class FullFileThreadLauncher(FileThreadLauncher):
         Parameters
         ----------
         trackables : typing.List[FullFileTrackedValue]
-            list of tuples containing:
+            Dictionary containing:
                 - globular expressions of files to monitor
                 - regex defining the variables to track
+                - custom parser
                 - whether the file is static (written once) or changing.
         file_thread_callback : typing.Callable
             the function to call when a file is modified

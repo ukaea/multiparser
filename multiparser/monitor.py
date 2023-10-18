@@ -18,7 +18,6 @@ __copyright__ = "Copyright 2023, United Kingdom Atomic Energy Authority"
 
 import glob
 import logging
-import re
 import sys
 import threading
 import typing
@@ -66,7 +65,7 @@ class FileMonitor:
         )
         self._complete = threading.Event()
         self._abort_file_monitors = threading.Event()
-        self._known_files: typing.List[str] = []
+        self._known_files: typing.List[str] = ["LLAMAS"]
         self._file_globex: typing.List[FullFileTrackedValue] = []
         self._log_globex: typing.List[LogFileRegexPair] = []
         self._excluded_patterns: typing.List[str] = []
@@ -87,14 +86,15 @@ class FileMonitor:
         def _full_file_monitor_func(
             glob_exprs: typing.List[FullFileTrackedValue],
             exc_glob_exprs: typing.List[str],
-            termination_trigger: threading.Event = self._abort_file_monitors,
-            interval: float = self._interval,
+            file_list: typing.List[str],
+            termination_trigger: threading.Event,
+            interval: float,
         ) -> None:
             _full_file_threads = mp_thread.FullFileThreadLauncher(
                 trackables=glob_exprs,
                 exclude_files_globex=exc_glob_exprs,
                 refresh_interval=interval,
-                file_list=self._known_files,
+                file_list=file_list,
                 file_thread_callback=self._per_thread_callback,
                 file_thread_lock=self._file_threads_mutex,
                 file_thread_termination_trigger=termination_trigger,
@@ -103,16 +103,17 @@ class FileMonitor:
             _full_file_threads.abort()
 
         def _log_file_monitor_func(
-            glob_exprs: typing.List[FullFileTrackedValue],
+            glob_exprs: typing.List[LogFileRegexPair],
             exc_glob_exprs: typing.List[str],
-            termination_trigger: threading.Event = self._abort_file_monitors,
-            interval: float = self._interval,
+            file_list: typing.List[str],
+            termination_trigger: threading.Event,
+            interval: float,
         ) -> None:
             _log_file_threads = mp_thread.LogFileThreadLauncher(
                 trackables=glob_exprs,
                 exclude_files_globex=exc_glob_exprs,
                 refresh_interval=interval,
-                file_list=self._known_files,
+                file_list=file_list,
                 file_thread_callback=self._per_thread_callback,
                 file_thread_lock=self._file_threads_mutex,
                 file_thread_termination_trigger=termination_trigger,
@@ -123,13 +124,25 @@ class FileMonitor:
         self._file_monitor_thread = mp_thread.HandledThread(
             task_identifier="Full File Monitor",
             target=_full_file_monitor_func,
-            args=(self._file_globex, self._excluded_patterns),
+            args=(
+                self._file_globex,
+                self._excluded_patterns,
+                self._known_files,
+                self._abort_file_monitors,
+                self._interval,
+            ),
         )
 
         self._log_monitor_thread = mp_thread.HandledThread(
             task_identifier="Log File Monitor",
             target=_log_file_monitor_func,
-            args=(self._log_globex, self._excluded_patterns),
+            args=(
+                self._log_globex,
+                self._excluded_patterns,
+                self._known_files,
+                self._abort_file_monitors,
+                self._interval,
+            ),
         )
 
     def exclude(self, path_glob_exprs: typing.List[str] | str) -> None:
@@ -154,6 +167,7 @@ class FileMonitor:
         self,
         path_glob_exprs: typing.List[str] | str,
         tracked_values: typing.List[str] | None = None,
+        custom_parser: typing.Callable | None = None,
         static: bool = False,
     ) -> None:
         """Track a set of files.
@@ -171,25 +185,39 @@ class FileMonitor:
         tracked_values : typing.List[str] | None, optional
             a list of regular expressions defining variables to track
             within the file, by default None
+        custom_parser : typing.Callable | None, optional
+            provide a custom parsing function
         static : bool, optional
             (if known) whether the given file(s) are written only once
             and so looped monitoring is not required, by default False
         """
-        if tracked_values:
-            tracked_values = [re.compile(t, re.IGNORECASE) for t in tracked_values]
         if isinstance(path_glob_exprs, str):
-            self._file_globex.append((path_glob_exprs, tracked_values, static))
+            _parsing_dict: typing.Dict[str, typing.Any] = {
+                "glob_exprs": path_glob_exprs,
+                "tracked_values": tracked_values,
+                "static": static,
+                "custom_parser": custom_parser,
+            }
+            self._file_globex.append(_parsing_dict)
         else:
-            self._file_globex += [(g, tracked_values, static) for g in path_glob_exprs]
+            self._file_globex += [
+                {
+                    "glob_exprs": g,
+                    "tracked_values": tracked_values,
+                    "static": static,
+                    "custom_parser": custom_parser,
+                }
+                for g in path_glob_exprs
+            ]
 
         # Check globular expressions before passing them to thread
-        for expression in self._file_globex:
-            glob.glob(expression[0])
+        for entry in self._file_globex:
+            glob.glob(entry["glob_exprs"])
 
     def tail(
         self,
         path_glob_exprs: typing.List[str] | str,
-        regular_exprs: typing.List[typing.Pattern] | None = None,
+        tracked_values: typing.List[typing.Pattern] | None = None,
         labels: typing.List[str | None] | None = None,
     ) -> None:
         """Tail a set of files.
@@ -222,8 +250,8 @@ class FileMonitor:
         path_glob_exprs : typing.List[str] | str
             set of or single globular expression(s) defining files
             to monitor
-        regular_exprs : typing.List[Pattern], optional
-            a set of regular expressions defining variables to track.
+        tracked_values : typing.List[Pattern | str], optional
+            a set of regular expressions or strings defining variables to track.
             Where one capture group is defined the user must provide
             an associative label. Where two are defined, the first capture
             group is taken to be the label, the second the value.
@@ -232,31 +260,42 @@ class FileMonitor:
             list is None, then a capture group is used. If labels itself is
             None, it is assumed all matches have a label capture group.
         """
-        if labels and len(labels) != len(regular_exprs):
+        if labels and len(labels) != len(tracked_values):
             raise AssertionError(
                 "Number of labels must match number of regular expressions in 'tail'."
             )
-        if regular_exprs:
-            labels = labels or [None] * len(regular_exprs)
+        if tracked_values:
+            labels = labels or [None] * len(tracked_values)
             _reg_lab_expr_pairing: typing.List[
-                typing.Tuple[str | None, typing.Pattern]
+                typing.Tuple[str | None, typing.Pattern | str]
             ] | None = [
-                (label, re.compile(reg_ex, re.IGNORECASE))
-                for label, reg_ex in zip(labels, regular_exprs)
+                (label, reg_ex) for label, reg_ex in zip(labels, tracked_values)
             ]
         else:
             _reg_lab_expr_pairing = None
 
         if isinstance(path_glob_exprs, str):
-            self._log_globex.append((path_glob_exprs, _reg_lab_expr_pairing, False))
+            _parsing_dict: typing.Dict[str, typing.Any] = {
+                "glob_exprs": path_glob_exprs,
+                "tracked_values": _reg_lab_expr_pairing,
+                "static": False,
+                "custom_parser": None,
+            }
+            self._log_globex.append(_parsing_dict)
         else:
             self._log_globex += [
-                (g, _reg_lab_expr_pairing, False) for g in path_glob_exprs
+                {
+                    "glob_exprs": g,
+                    "tracked_values": _reg_lab_expr_pairing,
+                    "static": False,
+                    "custom_parser": None,
+                }
+                for g in path_glob_exprs
             ]
 
         # Check globular expressions before passing them to thread
         for expression in self._log_globex:
-            glob.glob(expression[0])
+            glob.glob(expression["glob_exprs"])
 
     def terminate(self) -> None:
         """Terminate all monitors."""
@@ -264,6 +303,9 @@ class FileMonitor:
         self._complete.set()
         self._file_monitor_thread.join()
         self._log_monitor_thread.join()
+
+        if not self._known_files:
+            loguru.logger.warning("No files were processed during this session.")
 
         if (
             _exception := self._file_monitor_thread.exception

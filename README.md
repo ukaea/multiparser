@@ -18,7 +18,10 @@ with FileMonitor(
         path_glob_exprs=["file_of_interest.toml", "out_dir/*.other"],
         tracked_values=[
             "list", "of", "interesting", "values",
-            r"^list", r"of\s", r"regular", r"Expressions"
+            re.compile(r"^list"),
+            re.compile(r"of\s"),
+            re.compile(r"regular"),
+            re.compile(r"Expressions")
         ],
         static=True
     )
@@ -35,7 +38,7 @@ first match in the group. These labels can be overwritten using the `labels` arg
 ```python
 monitor.tail(
     path_glob_exprs=["output.log"],
-    regular_exprs=["my_param=(\d+)"],
+    tracked_values=[re.compile(r"my_param=(\d+)")],
     labels=["My Parameter"]
 )
 ```
@@ -45,7 +48,7 @@ monitor.tail(
 The two methods of using regular expressions are either a single expression:
 
 ```python
-path_glob_exprs=[r"\w+=(\d+\.\d+)"],
+tracked_values=[re.compile(r"\w+=(\d+\.\d+)")],
 labels=["value"]
 ```
 
@@ -55,7 +58,7 @@ will be given a numerical suffix.
 The alternative is to provide a RegEx which captures the variable name directly:
 
 ```python
-path_glob_exprs=[r"(\w+)=(\d+\.\d+)", r"(\w+_\d+)=(\d+\.\d+)"],
+tracked_values=[re.compile(r"(\w+)=(\d+\.\d+)"), re.compile(r"(\w+_\d+)=(\d+\.\d+)")],
 labels=["value", None]
 ```
 
@@ -83,6 +86,7 @@ import multiparser
 import typing
 import json
 import time
+import re
 
 
 def callback_function(data: typing.Dict[str, typing.Any], meta_data: typing.Dict[str, typing.Any]) -> None:
@@ -102,14 +106,40 @@ def callback_function(data: typing.Dict[str, typing.Any], meta_data: typing.Dict
 def run_monitor() -> None:
     with multiparser.FileMonitor(
         per_thread_callback=callback_function,  # callback for each file update
-        interval=1.0                           # refresh interval in seconds
+        interval=1.0                            # refresh interval in seconds
     ) as monitor:
         monitor.track("my_file.csv")                          # Track a CSV file in the current directory
         monitor.track("*.toml", ["important_param"])          # Track a specific value (by name) in a set of files
-        monitor.track("my_metrics.nml", [r"^metric_\d"])      # Track a set of values using regex
+        monitor.track(
+            "my_metrics.nml",
+            [re.compile(r"^metric_\d")]
+        )                                                     # Track a set of values using regex
         monitor.exclude("param*.toml")                        # Exclude file patterns from tracking
         monitor.run()
         for _ in range(10):
             time.sleep(1)
         monitor.terminate()
+```
+
+## Creating Custom Parsers
+
+For some cases it may be easier to create a parser function of your own, this should make use of the `parser` decorator and
+have the following structure. The function should return a tuple containing an empty dictionary representing the parsed call
+metadata (this is extended by the decorator) and a flat dictionary with key-value pairs for the captured values:
+
+```python
+# Create a new parser with file name as first argument, the
+def my_parser(file_name: str) -> typing.Tuple[typing.Dict[str, typing.Any], typing.Dict[str, typing.Any]]:
+    _out_data = {}
+    # add methods for filling dictionary
+    return {}, _out_data
+```
+
+this function can then be provided as an argument to the `FileMonitor` method `track`:
+
+```python
+monitor.track(
+    "output_file.dat",
+    custom_parser=my_parser
+)
 ```

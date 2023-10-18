@@ -1,6 +1,12 @@
 import typing
 
-LogFileRegexPair = typing.Tuple[
-    str, typing.List[typing.Tuple[str | None, typing.Pattern]], bool
+LogFileRegexPair = typing.Dict[
+    str,
+    typing.List[typing.Tuple[str | None, typing.Pattern]]
+    | bool
+    | typing.Callable
+    | None,
 ]
-FullFileTrackedValue = typing.Tuple[str, typing.List[str], bool]
+FullFileTrackedValue = typing.Dict[
+    str, typing.List[str] | bool | typing.Callable | None
+]

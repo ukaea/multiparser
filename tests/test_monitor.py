@@ -5,6 +5,7 @@ import random
 import re
 import tempfile
 import time
+import typing
 
 import pandas
 import pytest
@@ -15,6 +16,9 @@ from conftest import fake_csv, fake_nml, fake_toml, to_nml
 import multiparser
 import multiparser.exceptions as mp_exc
 import multiparser.thread as mp_thread
+
+
+DATA_LIBRARY: str = os.path.join(os.path.dirname(__file__), "data")
 
 
 @pytest.mark.monitor
@@ -52,7 +56,6 @@ def test_run_on_directory_all(
         with multiparser.FileMonitor(
             per_thread_callback, interval=_interval, log_level=logging.DEBUG
         ) as monitor:
-
             monitor.track(os.path.join(temp_d, "*"))
             monitor.exclude(os.path.join(temp_d, "*.toml"))
             monitor.tail(*fake_log)
@@ -104,17 +107,79 @@ def test_run_on_directory_filtered() -> None:
         with multiparser.FileMonitor(
             per_thread_callback, interval=_interval
         ) as monitor:
-            monitor.track(_csv_file, ["d_other", r"\w_value"])
-            monitor.track(_nml_file, ["\w_val_\w"])
-            monitor.track(_toml_file, ["input_swe", r"input_\d"])
+            monitor.track(_csv_file, ["d_other", re.compile("\w_value")])
+            monitor.track(_nml_file, [re.compile("\w_val_\w")])
+            monitor.track(_toml_file, ["input_swe", re.compile(r"input_\d")])
             monitor.run()
             for _ in range(10):
                 time.sleep(_interval)
             monitor.terminate()
 
 
-@pytest.mark.monitor
-def test_invalid_regex() -> None:
-    with pytest.raises(re.error):
-        with multiparser.FileMonitor(lambda x: None) as monitor:
-            monitor.track("*", r"\w\d)")
+@pytest.mark.parsing
+@pytest.mark.parametrize(
+    "stage,contains",
+    [[1, ("matrix", "k", "v_sync", "i(1)", "i(2)")]],
+    ids=[f"stage_{i}" for i in range(1, 2)],
+)
+def test_custom_data(stage: int, contains: typing.Tuple[str, ...]) -> None:
+    _file: str = os.path.join(DATA_LIBRARY, f"custom_output_stage_{stage}.dat")
+
+    def _custom_parser(
+        file_name: str,
+    ) -> typing.Tuple[typing.Dict[str, typing.Any], typing.Dict[str, typing.Any]]:
+        _get_matrix = r"^[(\d+.\d+) *]{16}$"
+        _initial_params_regex = r"^([\w_\(\)]+)\s*=\s*(\d+\.*\d*)$"
+        _out_data = {}
+        with open(file_name) as in_f:
+            _file_data = in_f.read()
+            _matrix_iter = re.finditer(_get_matrix, _file_data, re.MULTILINE)
+            _init_params_iter = re.finditer(
+                _initial_params_regex, _file_data, re.MULTILINE
+            )
+
+            _matrix = []
+            for result in _matrix_iter:
+                _matrix.append([float(i) for i in str(result.group()).split(" ")])
+            _out_data["matrix"] = _matrix
+
+            for result in _init_params_iter:
+                _key = result.group(1)
+                _value = result.group(2)
+                _out_data[_key] = float(_value)
+
+            if not _out_data:
+                raise AssertionError("Failed to retrieve any values")
+
+        return {}, _out_data
+
+    _expected = {
+        "matrix": [
+            [10.0, 2.0, 3.0, 4.0],
+            [2.0, 10.0, 2.5, 8.0],
+            [3.0, 2.5, 10.0, 1.0],
+            [4.0, 8.0, 1.0, 10.0],
+        ],
+        "k": 5.81,
+        "v_sync": 4.2389,
+        "i(1)": 3,
+        "i(2)": 9.81,
+    }
+
+    def _validation_callback(data, _, check=contains):
+        for key, value in _expected.items():
+            if key in check:
+                assert data[key] == value
+
+    with multiparser.FileMonitor(
+        _validation_callback, interval=0.1, log_level=logging.DEBUG
+    ) as monitor:
+        monitor.track(
+            _file,
+            custom_parser=_custom_parser,
+            tracked_values=list(_expected.keys()),
+            static=True,
+        )
+        monitor.run()
+        time.sleep(2)
+        monitor.terminate()

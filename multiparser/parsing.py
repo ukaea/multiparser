@@ -17,7 +17,7 @@ TimeStampedData = typing.Tuple[
 ]
 
 
-def meta_stamp_record(parser: typing.Callable) -> typing.Callable:
+def parser(parser: typing.Callable) -> typing.Callable:
     """Attach metadata to the current parser call.
 
     This is a decorator for parser functions which attaches information
@@ -49,61 +49,61 @@ def meta_stamp_record(parser: typing.Callable) -> typing.Callable:
     return _wrapper
 
 
-@meta_stamp_record
+@parser
 def record_json(input_file: str, **_) -> TimeStampedData:
     """Parse a JSON file"""
     return {}, json.load(open(input_file))
 
 
-@meta_stamp_record
+@parser
 def record_yaml(input_file: str, **_) -> TimeStampedData:
     """Parse a YAML file"""
     return {}, yaml.load(open(input_file), Loader=yaml.SafeLoader)
 
 
-@meta_stamp_record
+@parser
 def record_pickle(input_file: str, **_) -> TimeStampedData:
     """Parse a pickle file"""
     return {}, pickle.load(open(input_file, "rb"))
 
 
-@meta_stamp_record
+@parser
 def record_fortran_nml(input_file: str, **_) -> TimeStampedData:
     """Parse a Fortran Named List"""
     return {}, f90nml.read(input_file)
 
 
-@meta_stamp_record
+@parser
 def record_csv(input_file: str, **_) -> TimeStampedData:
     """Parse a comma separated values file"""
     return {}, pandas.read_csv(input_file).to_dict()
 
 
-@meta_stamp_record
+@parser
 def record_feather(input_file: str, **_) -> TimeStampedData:
     """Parse a feather file"""
     return {}, pandas.read_feather(input_file).to_dict()
 
 
-@meta_stamp_record
+@parser
 def record_parquet(input_file: str, **_) -> TimeStampedData:
     """Parse a parquet file"""
     return {}, pandas.read_parquet(input_file).to_dict()
 
 
-@meta_stamp_record
+@parser
 def record_hdf(input_file: str, **_) -> TimeStampedData:
     """Parse a HDF5 file"""
     return {}, pandas.read_hdf(input_file).to_dict()
 
 
-@meta_stamp_record
+@parser
 def record_toml(input_file: str, **_) -> TimeStampedData:
     """Parse a TOML file"""
     return {}, toml.load(input_file)
 
 
-@meta_stamp_record
+@parser
 def _process_log_line(
     _: str,
     file_line: str,
@@ -146,9 +146,16 @@ def _process_log_line(
             return float(value)
         return value
 
-    for label, regex in tracked_values:
-        if not (_results := regex.findall(file_line)):
-            continue
+    for label, tracked_val in tracked_values:
+        if isinstance(tracked_val, str):
+            if tracked_val not in file_line:
+                continue
+            _results = [tracked_val]
+            _type: str = "Parameter ID"
+        else:
+            if not (_results := tracked_val.findall(file_line)):
+                continue
+            _type = "Regex string"
 
         _multiple_results: bool = len(_results) > 1
 
@@ -165,12 +172,12 @@ def _process_log_line(
                     _label, _value_str = result
                 else:
                     raise ValueError(
-                        f"Regex string '{regex}' with label assignment must return a value"
+                        f"{_type} '{tracked_val}' with label assignment must return a value"
                     )
             elif not label:
                 if len(result) != 2:
                     raise ValueError(
-                        f"Regex string '{regex}' without label assignment must return a key-value pair"
+                        f"{_type} '{tracked_val}' without label assignment must return a key-value pair"
                     )
                 _label, _value_str = result
             else:
@@ -268,7 +275,9 @@ SUFFIX_PARSERS: typing.Dict[typing.Tuple[str, ...], typing.Callable] = {
 
 
 def record_file(
-    input_file: str, tracked_values: typing.List[typing.Pattern] | None
+    input_file: str,
+    tracked_values: typing.List[typing.Pattern] | None,
+    custom_parser: typing.Callable | None,
 ) -> TimeStampedData:
     """Record a recognised file, parsing its contents.
 
@@ -296,20 +305,31 @@ def record_file(
     _extension: str = os.path.splitext(input_file)[1].replace(".", "")
     _tracked_vals: typing.List[typing.Pattern] | None = tracked_values or []
 
-    for key, parser in SUFFIX_PARSERS.items():
-        if _extension not in key:
-            continue
-        _parsed_data: TimeStampedData = parser(input_file)
+    def _do_parse(parse_func, in_file=input_file):
+        _parsed_data = parse_func(in_file)
 
         if not _tracked_vals:
             return _parsed_data
 
         _out_data: typing.Dict[str, typing.Any] = {}
 
-        for reg_ex in tracked_values or []:
-            _out_data |= {k: v for k, v in _parsed_data[1].items() if reg_ex.findall(k)}
+        for tracked_val in tracked_values or []:
+            _out_data |= {
+                k: v
+                for k, v in _parsed_data[1].items()
+                if (isinstance(tracked_val, str) and tracked_val in k)
+                or (not isinstance(tracked_val, str) and tracked_val.findall(k))
+            }
 
         return _parsed_data[0], _out_data
+
+    if custom_parser:
+        return _do_parse(custom_parser)
+    else:
+        for key, parser in SUFFIX_PARSERS.items():
+            if _extension not in key:
+                continue
+            return _do_parse(parser)
 
     loguru.logger.error(
         f"The file extension '{_extension}' is not supported for 'record_file', did you mean to use 'tail'?"
