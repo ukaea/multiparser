@@ -34,7 +34,9 @@ class FileMonitor:
     def __init__(
         self,
         per_thread_callback: typing.Callable,
-        lock_callback: bool = False,
+        exception_callback: typing.Callable | None = None,
+        notification_callback: typing.Callable | None = None,
+        lock_callbacks: bool = True,
         interval: float = 1e-3,
         log_level: int | str = logging.INFO,
     ) -> None:
@@ -50,9 +52,14 @@ class FileMonitor:
             Dictionary for caching values read from the file parsing threads
         per_thread_callback : typing.Callable
             function to be executed whenever a monitored file is modified
+        exception_callback : typing.Callable | None, optional
+            function to be executed when an exception is thrown
+        notification_callback : typing.Callable | None, optional
+            function to be called when a new file is found, default is
+            a print statement
         lock_callback : bool, optional
-            whether to only allow one thread to execute the per_thread_callback
-            at a time. Default is False.
+            whether to only allow one thread to execute the callbacks
+            at a time. Default is True.
         interval : float, optional
             the refresh rate of the file monitors, by default 10.0 seconds
         log_level : int | str, optional
@@ -60,12 +67,14 @@ class FileMonitor:
         """
         self._interval: float = interval
         self._per_thread_callback = per_thread_callback
+        self._notification_callback = notification_callback
+        self._exception_callback = exception_callback
         self._file_threads_mutex: typing.Any | None = (
-            threading.Lock() if lock_callback else None
+            threading.Lock() if lock_callbacks else None
         )
         self._complete = threading.Event()
         self._abort_file_monitors = threading.Event()
-        self._known_files: typing.List[str] = ["LLAMAS"]
+        self._known_files: typing.List[str] = []
         self._file_globex: typing.List[FullFileTrackedValue] = []
         self._log_globex: typing.List[LogFileRegexPair] = []
         self._excluded_patterns: typing.List[str] = []
@@ -98,6 +107,8 @@ class FileMonitor:
                 file_thread_callback=self._per_thread_callback,
                 file_thread_lock=self._file_threads_mutex,
                 file_thread_termination_trigger=termination_trigger,
+                exception_callback=self._exception_callback,
+                notification_callback=self._notification_callback,
             )
             _full_file_threads.run()
             _full_file_threads.abort()
@@ -117,6 +128,8 @@ class FileMonitor:
                 file_thread_callback=self._per_thread_callback,
                 file_thread_lock=self._file_threads_mutex,
                 file_thread_termination_trigger=termination_trigger,
+                exception_callback=self._exception_callback,
+                notification_callback=self._notification_callback,
             )
             _log_file_threads.run()
             _log_file_threads.abort()
@@ -124,6 +137,7 @@ class FileMonitor:
         self._file_monitor_thread = mp_thread.HandledThread(
             task_identifier="Full File Monitor",
             target=_full_file_monitor_func,
+            throw_callback=self._exception_callback,
             args=(
                 self._file_globex,
                 self._excluded_patterns,
@@ -136,6 +150,7 @@ class FileMonitor:
         self._log_monitor_thread = mp_thread.HandledThread(
             task_identifier="Log File Monitor",
             target=_log_file_monitor_func,
+            throw_callback=self._exception_callback,
             args=(
                 self._log_globex,
                 self._excluded_patterns,
