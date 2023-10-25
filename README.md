@@ -153,7 +153,7 @@ from multiparser import file_parser
 LogParseContent = Union[Dict[str, Any], List[Dict[str, Any]]]
 
 @log_parser
-def custom_file_parser(file_content: str, **_) -> Tuple[Dict[str, Any], LogParseContent]:
+def custom_log_parser(file_content: str, **_) -> Tuple[Dict[str, Any], LogParseContent]:
     ...
     return {}, out_data
 ```
