@@ -225,7 +225,7 @@ def test_parse_log_in_blocks() -> None:
     _counter = Counter()
 
     def callback_check(data, _, comparison=_expected, counter=_counter) -> None:
-        for key, value in data[-1].items():
+        for key, value in data.items():
             assert value == comparison[counter.value][key]
         counter.value += 1
 
