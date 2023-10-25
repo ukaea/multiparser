@@ -17,8 +17,8 @@ TimeStampedData = typing.Tuple[
 ]
 
 
-def parser(parser: typing.Callable) -> typing.Callable:
-    """Attach metadata to the current parser call.
+def file_parser(parser: typing.Callable) -> typing.Callable:
+    """Attach metadata to the current parser call for a file parser.
 
     This is a decorator for parser functions which attaches information
     on which file is being passed as well as the last modified time
@@ -49,67 +49,103 @@ def parser(parser: typing.Callable) -> typing.Callable:
     return _wrapper
 
 
-@parser
+def log_parser(parser: typing.Callable) -> typing.Callable:
+    """Attach metadata to the current parser call for a log parser.
+
+    This is a decorator for parser functions which attaches information
+    on which file is being passed as well as the last modified time
+    for that file.
+
+    Parameters
+    ----------
+    parser : typing.Callable
+        the parser function to wrap
+
+    Returns
+    -------
+    typing.Callable
+        new parse function with metadata capturing
+    """
+
+    def _wrapper(file_content, *args, **kwargs) -> TimeStampedData:
+        if "read_bytes" not in kwargs:
+            raise RuntimeError("Failed to retrieve argument 'read_bytes'")
+        if not (_input_file := kwargs.get("input_file")):
+            raise RuntimeError("Failed to retrieve argument 'input_file'")
+        _meta_data: typing.Dict[str, str] = {
+            "timestamp": datetime.datetime.fromtimestamp(
+                os.path.getmtime(_input_file)
+            ).strftime("%Y-%m-%d %H:%M:%S.%f"),
+            "hostname": platform.node(),
+            "file_name": _input_file,
+            "read_bytes": kwargs["read_bytes"],
+        }
+        _meta, _data = parser(file_content, *args, **kwargs)
+        return _meta | _meta_data, _data
+
+    return _wrapper
+
+
+@file_parser
 def record_json(input_file: str, **_) -> TimeStampedData:
     """Parse a JSON file"""
     return {}, json.load(open(input_file))
 
 
-@parser
+@file_parser
 def record_yaml(input_file: str, **_) -> TimeStampedData:
     """Parse a YAML file"""
     return {}, yaml.load(open(input_file), Loader=yaml.SafeLoader)
 
 
-@parser
+@file_parser
 def record_pickle(input_file: str, **_) -> TimeStampedData:
     """Parse a pickle file"""
     return {}, pickle.load(open(input_file, "rb"))
 
 
-@parser
+@file_parser
 def record_fortran_nml(input_file: str, **_) -> TimeStampedData:
     """Parse a Fortran Named List"""
     return {}, f90nml.read(input_file)
 
 
-@parser
+@file_parser
 def record_csv(input_file: str, **_) -> TimeStampedData:
     """Parse a comma separated values file"""
     return {}, pandas.read_csv(input_file).to_dict()
 
 
-@parser
+@file_parser
 def record_feather(input_file: str, **_) -> TimeStampedData:
     """Parse a feather file"""
     return {}, pandas.read_feather(input_file).to_dict()
 
 
-@parser
+@file_parser
 def record_parquet(input_file: str, **_) -> TimeStampedData:
     """Parse a parquet file"""
     return {}, pandas.read_parquet(input_file).to_dict()
 
 
-@parser
+@file_parser
 def record_hdf(input_file: str, **_) -> TimeStampedData:
     """Parse a HDF5 file"""
     return {}, pandas.read_hdf(input_file).to_dict()
 
 
-@parser
+@file_parser
 def record_toml(input_file: str, **_) -> TimeStampedData:
     """Parse a TOML file"""
     return {}, toml.load(input_file)
 
 
-@parser
+@log_parser
 def _process_log_line(
-    _: str,
-    file_line: str,
-    read_bytes: int,
+    file_content: str,
     tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
     convert: bool = True,
+    **_,
 ) -> TimeStampedData:
     """Process a single line of a log file extracting the tracked values.
 
@@ -117,11 +153,10 @@ def _process_log_line(
     ----------
     _ : str
         input file name (ignored by this function itself but needed so metadata decorator can be called)
+    __ : int
+        the number of bytes currently read (ignored by this function itself but needed so metadata decorator can be called)
     file_line : str
         the contents of the file line
-    read_bytes : int
-        the number of bytes currently read, this information is stored within the metadata so it can
-        be referred to at a later point
     tracked_values : typing.List[typing.Tuple[str  |  None, typing.Pattern]] | None, optional
         regular expressions defining which values to track within the log file, by default None
     convert : bool, optional
@@ -134,7 +169,7 @@ def _process_log_line(
         * actual recorded data from the file.
     """
     if not tracked_values:
-        return {"read_bytes": read_bytes}, {}
+        return {}, {}
 
     _out_data: typing.Dict[str, typing.Any] = {}
 
@@ -148,12 +183,12 @@ def _process_log_line(
 
     for label, tracked_val in tracked_values:
         if isinstance(tracked_val, str):
-            if tracked_val not in file_line:
+            if tracked_val not in file_content:
                 continue
             _results = [tracked_val]
             _type: str = "Parameter ID"
         else:
-            if not (_results := tracked_val.findall(file_line)):
+            if not (_results := tracked_val.findall(file_content)):
                 continue
             _type = "Regex string"
 
@@ -186,11 +221,11 @@ def _process_log_line(
 
             _label = f"{label}_{i}" if _multiple_results else _label
             _out_data[_label] = _converter(_value_str) if convert else _value_str
-    return {"read_bytes": read_bytes}, _out_data
+    return {}, _out_data
 
 
 def tail_file_n_bytes(
-    file_name: str, read_blocks: int | None
+    file_name: str, read_bytes: int | None
 ) -> typing.Tuple[int, typing.List[str]]:
     """Read lines from the end of a file.
 
@@ -203,7 +238,7 @@ def tail_file_n_bytes(
     ----------
     file_name : str
         the path of the file to be read
-    read_blocks : int, optional
+    read_bytes : int, optional
         if specified, skip to this position in the file
         before reading
 
@@ -214,8 +249,8 @@ def tail_file_n_bytes(
         * lines read
     """
     with open(file_name, "r") as _in_f:
-        if read_blocks:
-            _in_f.seek(read_blocks, 0)
+        if read_bytes is not None:
+            _in_f.seek(read_bytes)
         _lines = _in_f.readlines()
         return _in_f.tell(), _lines
 
@@ -225,6 +260,7 @@ def record_log(
     tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
     convert: bool = True,
     read_bytes: int | None = None,
+    custom_parser: typing.Callable | None = None,
     **_,
 ) -> typing.List[TimeStampedData]:
     """Record lines within a log type file.
@@ -250,11 +286,17 @@ def record_log(
         * actual recorded data from the file.
     """
     _read_bytes, _lines = tail_file_n_bytes(input_file, read_bytes)
+    if custom_parser:
+        return [
+            custom_parser(
+                "\n".join(_lines), input_file=input_file, read_bytes=_read_bytes
+            )
+        ]
     return [
         _process_log_line(
-            input_file,
-            file_line=line,
+            input_file=input_file,
             read_bytes=_read_bytes,
+            file_content=line,
             tracked_values=tracked_values,
             convert=convert,
         )
@@ -278,6 +320,7 @@ def record_file(
     input_file: str,
     tracked_values: typing.List[typing.Pattern] | None,
     custom_parser: typing.Callable | None,
+    **_,
 ) -> TimeStampedData:
     """Record a recognised file, parsing its contents.
 
@@ -306,7 +349,7 @@ def record_file(
     _tracked_vals: typing.List[typing.Pattern] | None = tracked_values or []
 
     def _do_parse(parse_func, in_file=input_file):
-        _parsed_data = parse_func(in_file)
+        _parsed_data = parse_func(input_file=in_file)
 
         if not _tracked_vals:
             return _parsed_data

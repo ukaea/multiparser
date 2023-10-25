@@ -6,16 +6,20 @@ import re
 import tempfile
 import time
 import typing
+import dataclasses
 
 import pandas
 import pytest
 import pytest_mock
+import multiprocessing
 import toml
+import xeger
 from conftest import fake_csv, fake_nml, fake_toml, to_nml
 
 import multiparser
 import multiparser.exceptions as mp_exc
 import multiparser.thread as mp_thread
+import multiparser.parsing as mp_parse
 
 
 DATA_LIBRARY: str = os.path.join(os.path.dirname(__file__), "data")
@@ -125,13 +129,14 @@ def test_run_on_directory_filtered() -> None:
 def test_custom_data(stage: int, contains: typing.Tuple[str, ...]) -> None:
     _file: str = os.path.join(DATA_LIBRARY, f"custom_output_stage_{stage}.dat")
 
+    @mp_parse.file_parser
     def _custom_parser(
-        file_name: str,
+        input_file: str, **_
     ) -> typing.Tuple[typing.Dict[str, typing.Any], typing.Dict[str, typing.Any]]:
         _get_matrix = r"^[(\d+.\d+) *]{16}$"
         _initial_params_regex = r"^([\w_\(\)]+)\s*=\s*(\d+\.*\d*)$"
         _out_data = {}
-        with open(file_name) as in_f:
+        with open(input_file) as in_f:
             _file_data = in_f.read()
             _matrix_iter = re.finditer(_get_matrix, _file_data, re.MULTILINE)
             _init_params_iter = re.finditer(
@@ -183,3 +188,74 @@ def test_custom_data(stage: int, contains: typing.Tuple[str, ...]) -> None:
         monitor.run()
         time.sleep(2)
         monitor.terminate()
+
+
+@pytest.mark.parsing
+def test_parse_log_in_blocks() -> None:
+    _refresh_interval: float = 0.1
+    _expected = [{f"var_{i}": random.random() * 10 for i in range(5)} for _ in range(10)]
+    _xeger = xeger.Xeger()
+    _file_blocks = []
+    _gen_rgx = r"\w+: \d+\.\d+"
+    _file_blocks += [
+        [_xeger.xeger(_gen_rgx)+"\n"] +
+        [_xeger.xeger(_gen_rgx)+ "\n"] +
+        [_xeger.xeger(_gen_rgx)+"\n"] +
+        [_xeger.xeger(_gen_rgx)+"\n"] +
+        ["\tData Out\n"] +
+        [f"\tResult: {i['var_0']}\n"] +
+        [f"\tMetric: {i['var_1']}\n"] +
+        [f"\tNormalised: {i['var_2']}\n"] +
+        [f"\tAccuracy: {i['var_3']}\n"] +
+        [f"\tDeviation: {i['var_4']}\n"]
+        for i in _expected
+    ]
+
+    def run_simulation(out_file: str, trigger, file_content: typing.List[typing.List[str]]=_file_blocks, interval:float=_refresh_interval) -> None:
+        for block in file_content:
+            time.sleep(interval)
+            with open(out_file, "a") as out_f:
+                out_f.writelines(block)
+        trigger.set()
+
+    @dataclasses.dataclass
+    class Counter:
+        value: int = 0
+
+    _counter = Counter()
+
+    def callback_check(data, _, comparison=_expected, counter=_counter) -> None:
+        for key, value in data[-1].items():
+            assert value == comparison[counter.value][key]
+        counter.value += 1
+
+    @mp_parse.log_parser
+    def custom_parser(file_data: str, **_) -> typing.Tuple[typing.Dict[str, typing.Any], ...]:
+        _regex_search_str = r"\s*Data Out\n\s*Result:\ (\d+\.\d+)\n\s*Metric:\ (\d+\.\d+)\n\s*Normalised:\ (\d+\.\d+)\n\s*Accuracy:\ (\d+\.\d+)\n\s*Deviation:\ (\d+\.\d+)"
+
+        _parser = re.compile(_regex_search_str, re.MULTILINE)
+        _out_data = []
+
+        for match_group in _parser.finditer(file_data):
+            _out_data += [
+                {f"var_{i}": float(match_group.group(i+1)) for i in range(5)}
+            ]
+        return {}, _out_data
+
+    with tempfile.NamedTemporaryFile(suffix=".log") as temp_f:
+        _termination_trigger = multiprocessing.Event()
+        _process = multiprocessing.Process(target=run_simulation, args=(temp_f.name,_termination_trigger))
+
+        with multiparser.FileMonitor(
+            per_thread_callback=callback_check,
+            termination_trigger=_termination_trigger,
+            interval=0.1*_refresh_interval,
+            log_level=logging.DEBUG
+        ) as monitor:
+            monitor.tail(
+                temp_f.name,
+                custom_parser=custom_parser
+            )
+            _process.start()
+            monitor.run()
+            _process.join()

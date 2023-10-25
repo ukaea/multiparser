@@ -18,6 +18,8 @@ __copyright__ = "Copyright 2023, United Kingdom Atomic Energy Authority"
 
 import glob
 import logging
+import re
+import string
 import sys
 import threading
 import typing
@@ -36,6 +38,7 @@ class FileMonitor:
         per_thread_callback: typing.Callable,
         exception_callback: typing.Callable | None = None,
         notification_callback: typing.Callable | None = None,
+        termination_trigger: threading.Event | None = None,
         lock_callbacks: bool = True,
         interval: float = 1e-3,
         log_level: int | str = logging.INFO,
@@ -72,8 +75,9 @@ class FileMonitor:
         self._file_threads_mutex: typing.Any | None = (
             threading.Lock() if lock_callbacks else None
         )
-        self._complete = threading.Event()
-        self._abort_file_monitors = threading.Event()
+        self._manual_abort: bool = termination_trigger is not None
+        self._complete = termination_trigger or threading.Event()
+        self._abort_file_monitors = termination_trigger or threading.Event()
         self._known_files: typing.List[str] = []
         self._file_globex: typing.List[FullFileTrackedValue] = []
         self._log_globex: typing.List[LogFileRegexPair] = []
@@ -160,6 +164,25 @@ class FileMonitor:
             ),
         )
 
+    def _check_custom_log_parser(self, parser: typing.Callable) -> None:
+        """Verifies the parser works correctly before launching threads"""
+        _test_str = string.ascii_lowercase
+        _test_str += string.ascii_uppercase
+        _test_str += string.ascii_letters
+        _test_str *= 100
+        try:
+            _out = parser(_test_str, input_file=__file__, read_bytes=None)
+        except Exception as e:
+            raise AssertionError(f"Custom parser testing failed with exception:\n{e}")
+        if len(_out) != 2:
+            raise AssertionError(
+                "Parser function must return two objects, a metadata dictionary and parsed values"
+            )
+        if "_wrapper" not in parser.__name__:
+            raise AssertionError(
+                "Parser function must be decorated using the multiparser.parser decorator"
+            )
+
     def exclude(self, path_glob_exprs: typing.List[str] | str) -> None:
         """Exclude a set of files from monitoring.
 
@@ -233,7 +256,8 @@ class FileMonitor:
         self,
         path_glob_exprs: typing.List[str] | str,
         tracked_values: typing.List[typing.Pattern] | None = None,
-        labels: typing.List[str | None] | None = None,
+        labels: str | typing.List[str | None] | None = None,
+        custom_parser: typing.Callable | None = None,
     ) -> None:
         """Tail a set of files.
 
@@ -275,26 +299,47 @@ class FileMonitor:
             list is None, then a capture group is used. If labels itself is
             None, it is assumed all matches have a label capture group.
         """
-        if labels and len(labels) != len(tracked_values):
+        if custom_parser:
+            self._check_custom_log_parser(custom_parser)
+
+        if custom_parser and tracked_values:
+            raise AssertionError(
+                "Cannot specify both tracked values and custom parser for monitor "
+                "method 'track'"
+            )
+
+        if custom_parser and labels:
+            raise AssertionError(
+                "Cannot specify both labels and custom parser for monitor "
+                "method 'track'"
+            )
+
+        if tracked_values and isinstance(labels, (str, re.Pattern)):
+            tracked_values = [tracked_values]
+
+        if labels and isinstance(labels, (str, re.Pattern)):
+            labels = [labels]
+
+        if labels and tracked_values and len(labels) != len(tracked_values):
             raise AssertionError(
                 "Number of labels must match number of regular expressions in 'tail'."
             )
-        if tracked_values:
+        if not tracked_values or custom_parser:
+            _reg_lab_expr_pairing = None
+        else:
             labels = labels or [None] * len(tracked_values)
             _reg_lab_expr_pairing: typing.List[
                 typing.Tuple[str | None, typing.Pattern | str]
             ] | None = [
                 (label, reg_ex) for label, reg_ex in zip(labels, tracked_values)
             ]
-        else:
-            _reg_lab_expr_pairing = None
 
-        if isinstance(path_glob_exprs, str):
+        if isinstance(path_glob_exprs, (str, re.Pattern)):
             _parsing_dict: typing.Dict[str, typing.Any] = {
                 "glob_exprs": path_glob_exprs,
                 "tracked_values": _reg_lab_expr_pairing,
                 "static": False,
-                "custom_parser": None,
+                "custom_parser": custom_parser,
             }
             self._log_globex.append(_parsing_dict)
         else:
@@ -303,7 +348,7 @@ class FileMonitor:
                     "glob_exprs": g,
                     "tracked_values": _reg_lab_expr_pairing,
                     "static": False,
-                    "custom_parser": None,
+                    "custom_parser": custom_parser,
                 }
                 for g in path_glob_exprs
             ]
@@ -312,10 +357,11 @@ class FileMonitor:
         for expression in self._log_globex:
             glob.glob(expression["glob_exprs"])
 
-    def terminate(self) -> None:
+    def terminate(self, __manual_abort: bool = True) -> None:
         """Terminate all monitors."""
-        self._abort_file_monitors.set()
-        self._complete.set()
+        if __manual_abort:
+            self._abort_file_monitors.set()
+            self._complete.set()
         self._file_monitor_thread.join()
         self._log_monitor_thread.join()
 
@@ -332,6 +378,8 @@ class FileMonitor:
         """Launch all monitors"""
         self._file_monitor_thread.start()
         self._log_monitor_thread.start()
+        if self._manual_abort:
+            self.terminate(False)
 
     def __enter__(self) -> "FileMonitor":
         self._create_monitor_threads()

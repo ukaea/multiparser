@@ -166,7 +166,7 @@ class FileThreadLauncher:
         self._exclude_globex: typing.List[str] | None = exclude_files_globex
         self._records: typing.List[typing.Tuple[str, str]] = []
         self._interval = refresh_interval
-        self._monitored_files = file_list or []
+        self._monitored_files = file_list if file_list is not None else []
 
     def _append_thread(
         self,
@@ -174,6 +174,7 @@ class FileThreadLauncher:
         tracked_values: LogFileRegexPair | FullFileTrackedValue,
         static: bool = False,
         custom_parser: typing.Callable | None = None,
+        convert: bool = True,
         **_,
     ) -> None:
         """Create a new thread for a monitored file
@@ -186,6 +187,10 @@ class FileThreadLauncher:
             values to monitor within the given file
         static : bool, optional
             whether the file is written only once, by default False
+        custom_parser : typing.Callable | None, optional
+            use a user defined parser instead
+        convert : bool, optional
+            convert values from string to numeric where appropriate
         """
 
         def _read_action(
@@ -197,6 +202,7 @@ class FileThreadLauncher:
             tracked_vals: LogFileRegexPair | FullFileTrackedValue = tracked_values,
             lock: typing.Any | None = self._lock,
             static_read: bool = static,
+            cstm_parser: typing.Callable | None = custom_parser,
         ) -> None:
 
             _cached_metadata: typing.Dict[str, str | int] = {}
@@ -219,21 +225,28 @@ class FileThreadLauncher:
 
                 # Pass previous cached metadata to the parser in case required
                 _parsed = self._parsing_callback(
-                    file_name, tracked_vals, custom_parser, **_cached_metadata
+                    file_name,
+                    tracked_vals,
+                    custom_parser=cstm_parser,
+                    convert=convert,
+                    **_cached_metadata,
                 )
 
                 # Some parsers return multiple results, e.g. those parsing multiple file lines
                 _parsed_list = [_parsed] if not isinstance(_parsed, list) else _parsed
 
                 for _meta, _data in _parsed_list:
+                    # Keep latest
+                    _cached_metadata = _meta
+
+                    if not _data:
+                        continue
+                    loguru.logger.debug(f"{file_name}: Recorded: {_data}")
                     if lock:
                         with lock:
                             monitor_callback(_data, _meta)
                     else:
                         monitor_callback(_data, _meta)
-
-                    # Keep latest
-                    _cached_metadata = _meta
 
                 records.append((_modified_time, file_name))
 
@@ -242,7 +255,7 @@ class FileThreadLauncher:
                     break
 
         self._file_threads[file_name] = HandledThread(
-            target=_read_action, args=(self._records)
+            target=_read_action, args=(self._records,)
         )
 
     @abort_on_fail
@@ -254,12 +267,21 @@ class FileThreadLauncher:
             for expr in self._exclude_globex or []:
                 _excludes += glob.glob(expr)
             for trackable in self._trackables:
+                # Check for multiple tracking entries for the same file
+                # not allowed due to constraint of one thread spawned per file
+                _registered_files: typing.List[str] = []
                 for file in glob.glob(trackable["glob_exprs"]):
+                    if file in _registered_files:
+                        raise AssertionError(
+                            "Conflicting globular expressions. "
+                            f"File '{file}' cannot be tracked above once."
+                        )
                     if file not in self._file_threads and file not in _excludes:
                         self._notifier(file)
                         self._monitored_files.append(file)
                         self._append_thread(file, **trackable)
                         self._file_threads[file].start()
+                        _registered_files.append(file)
 
     def _raise_exceptions(self) -> None:
         """Raise an exception summarising exception throws in all threads.
