@@ -234,14 +234,27 @@ class FileThreadLauncher:
 
                 # Some parsers return multiple results, e.g. those parsing multiple file lines
                 _parsed_list = [_parsed] if not isinstance(_parsed, list) else _parsed
+                _flattened_list = []
 
-                for _meta, _data in _parsed_list:
+                # If the parser method records a list of dictionaries as data
+                # we need to ensure these are handled in the same way as for parsers
+                # which return only a single data dictionary
+                for _meta, _entry in _parsed_list:
+                    if isinstance(_entry, (list, tuple, set)):
+                        for section in _entry:
+                            _flattened_list.append((_meta, section))
+                    else:
+                        _flattened_list.append((_meta, _entry))
+
+                for _meta, _data in _flattened_list:
                     # Keep latest
                     _cached_metadata = _meta
 
                     if not _data:
                         continue
+
                     loguru.logger.debug(f"{file_name}: Recorded: {_data}")
+
                     if lock:
                         with lock:
                             monitor_callback(_data, _meta)
