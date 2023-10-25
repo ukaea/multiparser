@@ -6,7 +6,17 @@ import pickle
 import platform
 import typing
 
-import f90nml
+with contextlib.suppress(ImportError):
+    pass
+
+with contextlib.suppress(ImportError):
+    import f90nml
+
+try:
+    import pyarrow
+except ImportError:
+    pyarrow = None
+
 import loguru
 import pandas
 import toml
@@ -119,12 +129,16 @@ def record_csv(input_file: str, **_) -> TimeStampedData:
 @file_parser
 def record_feather(input_file: str, **_) -> TimeStampedData:
     """Parse a feather file"""
+    if not pyarrow:
+        raise ImportError("Module 'pyarrow' is required for feather file type")
     return {}, pandas.read_feather(input_file).to_dict()
 
 
 @file_parser
 def record_parquet(input_file: str, **_) -> TimeStampedData:
     """Parse a parquet file"""
+    if not pyarrow:
+        raise ImportError("Module 'pyarrow' is required for parquet file type")
     return {}, pandas.read_parquet(input_file).to_dict()
 
 

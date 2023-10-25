@@ -4,6 +4,7 @@ import tempfile
 import time
 import typing
 import re
+import importlib.util
 
 import pytest
 from conftest import fake_csv, fake_feather, fake_nml, fake_toml
@@ -12,6 +13,10 @@ import multiparser.parsing as mp_parse
 
 
 @pytest.mark.parsing
+@pytest.mark.skipif(
+    importlib.util.find_spec("f90nml") is None,
+    reason="Module 'f90nml' not installed"
+)
 def test_parse_f90nml() -> None:
     with tempfile.TemporaryDirectory() as temp_d:
         _data_file = fake_nml(temp_d)
@@ -22,6 +27,10 @@ def test_parse_f90nml() -> None:
 
 
 @pytest.mark.parsing
+@pytest.mark.skipif(
+    importlib.util.find_spec("f90nml") is None,
+    reason="Module 'pandas' not installed"
+)
 def test_parse_csv() -> None:
     with tempfile.TemporaryDirectory() as temp_d:
         _data_file = fake_csv(temp_d)
@@ -32,6 +41,10 @@ def test_parse_csv() -> None:
 
 
 @pytest.mark.parsing
+@pytest.mark.skipif(
+    importlib.util.find_spec("pyarrow") is None,
+    reason="Module 'pyarrow' not installed"
+)
 def test_parse_feather() -> None:
     with tempfile.TemporaryDirectory() as temp_d:
         _data_file = fake_feather(temp_d)
