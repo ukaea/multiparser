@@ -123,23 +123,39 @@ def run_monitor() -> None:
 
 ## Creating Custom Parsers
 
-For some cases it may be easier to create a parser function of your own, this should make use of the `parser` decorator and
-have the following structure. The function should return a tuple containing an empty dictionary representing the parsed call
-metadata (this is extended by the decorator) and a flat dictionary with key-value pairs for the captured values:
+For some cases it may be easier to create a parser function of your own, this is particularly useful for custom layout log files.
+
+### File Parsers
+
+File parsers are those which take a file name and load the file as a whole, these are typically used when the file content is static, or the file is overwritten over time. To define a custom file parser ensure the function uses the `file_parser` decorator, takes a mandatory argument of the `input_file` path and also allows arbitrary keyword arguments in order for the decorator to function correctly:
 
 ```python
-# Create a new parser with file name as first argument, the
-def my_parser(file_name: str) -> typing.Tuple[typing.Dict[str, typing.Any], typing.Dict[str, typing.Any]]:
-    _out_data = {}
-    # add methods for filling dictionary
-    return {}, _out_data
+from typing import Dict, Tuple, Any
+from multiparser import file_parser
+
+@file_parser
+def custom_file_parser(input_file: str, **_) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    ...
+    return {}, out_data
 ```
 
-this function can then be provided as an argument to the `FileMonitor` method `track`:
+the function should return two dictionaries, the first is used by the decorator to assemble any metadata relating to the record, and the second the data itself which should be a single level dictionary with key-value pairs.
+
+
+### Log Parsers
+
+A log parser will only read the new content within a file ignoring any previously recorded lines, a custom log parser uses the `log_parser` decorator, takes a mandatory argument of the `file_content` to parse and also allows arbitrary keyword arguments in order for the decorator to function correctly:
 
 ```python
-monitor.track(
-    "output_file.dat",
-    custom_parser=my_parser
-)
+from typing import Dict, Tuple, Any, Union, List
+from multiparser import file_parser
+
+LogParseContent = Union[Dict[str, Any], List[Dict[str, Any]]]
+
+@log_parser
+def custom_file_parser(file_content: str, **_) -> Tuple[Dict[str, Any], LogParseContent]:
+    ...
+    return {}, out_data
 ```
+
+Unlike a file parser, a log parser may return either a single level dictionary with key-value pairs, or a list of such dictionaries (covering the case where multiple identical blocks are read, thus preventing overwrite). Log file parsers are validated prior to running.
