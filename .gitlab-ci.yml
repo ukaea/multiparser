@@ -83,8 +83,6 @@ sonarqube-check:
     paths:
       - .sonar/cache
   script:
-    - pip install coverage
-    - coverage xml
     - sonar-scanner
   allow_failure: true
   only:
