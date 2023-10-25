@@ -1,0 +1,22 @@
+&input_parameters
+    parameter1 = 42
+    parameter2 = 3.14
+    parameter3 = 'Hello, World!'
+    parameter4 = 12345
+    parameter5 = 0.123
+    parameter6 = 9876
+    parameter7 = 2.71828
+    parameter8 = 'Fortran is fun!'
+    parameter9 = 100
+    parameter10 = 4.567
+    parameter11 = -321
+    parameter12 = 0.98765
+    parameter13 = 'OpenAI'
+    parameter14 = 999
+    parameter15 = 1.234
+    parameter16 = 5678
+    parameter17 = 0.54321
+    parameter18 = 'Namelist Example'
+    parameter19 = -42
+    parameter20 = 6.28318
+/

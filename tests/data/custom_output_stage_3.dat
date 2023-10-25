@@ -1,0 +1,9 @@
+Running:
+
+separation_x = 4.22e2 > tolerance_x = 1e2
+separation_x = 3.22e2 > tolerance_x = 1e2
+separation_x = 2.22e2 > tolerance_x = 1e2
+separation_x = 1.22e2 > tolerance_x = 1e2
+separation_x = 8.21e1 <= tolerance_x = 1e2
+
+Success: Converged!

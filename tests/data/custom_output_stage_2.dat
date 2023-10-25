@@ -1,0 +1,15 @@
+Running:
+
+separation_x = 1.23e3 > tolerance_x = 1e2
+separation_x = 1.26e3 > tolerance_x = 1e2
+separation_x = 1.21e3 > tolerance_x = 1e2
+separation_x = 1.23e3 > tolerance_x = 1e2
+separation_x = 1.22e3 > tolerance_x = 1e2
+separation_x = 9.23e2 > tolerance_x = 1e2
+separation_x = 1.02e3 > tolerance_x = 1e2
+separation_x = 9.87e2 > tolerance_x = 1e2
+separation_x = 9.65e2 > tolerance_x = 1e2
+separation_x = 9.77e2 > tolerance_x = 1e2
+separation_x = 8.98e2 > tolerance_x = 1e2
+
+Warning: Failed to convert after 1st attempt, will try with shrunk parameters
