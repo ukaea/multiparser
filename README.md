@@ -4,6 +4,20 @@ _Multiparser_ is module for performing functionality across a set of output file
 
 For example, in the case where a set of model outputs were written to a set of files the user is able to specify which files are of importance, the variables to be noted within these files, and a function to execute whenever a change is made to one of these files.
 
+## Installation
+
+The module is currently in development, to install it run:
+
+```sh
+pip install <repository>
+```
+
+To install optional extras `pandas`, `arrow`, `fortran` list them during the install, e.g.:
+
+```sh
+pip install <repository>[pandas,arrow]
+```
+
 ## The FileMonitor class
 
 The main component of _Multiparser_ is the `FileMonitor` class which is a context manager. Files are individually "tracked" with the option to filter by value names or regular expressions. These files are read as a whole, suitable for files such as JSON and TOML:
@@ -42,6 +56,20 @@ monitor.tail(
     labels=["My Parameter"]
 )
 ```
+
+### "Lazy" vs Custom Parsing
+
+_Multiparser_ contains two methods for parsing, the first _lazy_ parsing will use the most appropriate parsing function to read a file based on its extension loading it in its entirety. This is useful when no customisation of the parsing process is required. The parse process assumes that the loaded object is (or can be loaded as) **a single level dictionary**. Lazy parsing supports:
+
+* TOML
+* YAML
+* Pickle
+* Fortran-90 Named List (variables are read into a dictionary, requires "fortran" extra to be installed).
+* Feather (requires "pyarrow" extra to be installed)
+* Parquet (requires "pyarrow" extra to be installed)
+* CSV (requires "pandas" extra to be installed)
+
+Custom parsing allows the user to specify their own function for extracting data, for more information see [_Creating Custom Parsers_](#creating-custom-parsers) below.
 
 ### Using RegEx
 
@@ -125,16 +153,28 @@ def run_monitor() -> None:
 
 For some cases it may be easier to create a parser function of your own, this is particularly useful for custom layout log files.
 
+You can provide a parser function and arguments _instead of_ a list of regular expressions or variable names when tracking or tailing:
+
+```python
+from pandas import read_hdf
+
+monitor.track(
+    "my_file.h5",
+    custom_parser=read_hdf,
+    parser_args={"key": "my_key"}
+)
+```
+
 ### File Parsers
 
-File parsers are those which take a file name and load the file as a whole, these are typically used when the file content is static, or the file is overwritten over time. To define a custom file parser ensure the function uses the `file_parser` decorator, takes a mandatory argument of the `input_file` path and also allows arbitrary keyword arguments in order for the decorator to function correctly:
+File parsers are those which take a file name and load the file as a whole, these are typically used when the file content is static, or the file is overwritten over time. To define a custom file parser ensure the function uses the `file_parser` decorator and takes a mandatory argument of the `input_file` path:
 
 ```python
 from typing import Dict, Tuple, Any
 from multiparser import file_parser
 
 @file_parser
-def custom_file_parser(input_file: str, **_) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+def custom_file_parser(input_file: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     ...
     return {}, out_data
 ```
@@ -144,7 +184,7 @@ the function should return two dictionaries, the first is used by the decorator 
 
 ### Log Parsers
 
-A log parser will only read the new content within a file ignoring any previously recorded lines, a custom log parser uses the `log_parser` decorator, takes a mandatory argument of the `file_content` to parse and also allows arbitrary keyword arguments in order for the decorator to function correctly:
+A log parser will only read the new content within a file ignoring any previously recorded lines, a custom log parser uses the `log_parser` decorator and takes a mandatory argument of the `file_content` to parse:
 
 ```python
 from typing import Dict, Tuple, Any, Union, List
@@ -153,7 +193,7 @@ from multiparser import file_parser
 LogParseContent = Union[Dict[str, Any], List[Dict[str, Any]]]
 
 @log_parser
-def custom_log_parser(file_content: str, **_) -> Tuple[Dict[str, Any], LogParseContent]:
+def custom_log_parser(file_content: str) -> Tuple[Dict[str, Any], LogParseContent]:
     ...
     return {}, out_data
 ```

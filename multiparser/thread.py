@@ -174,6 +174,7 @@ class FileThreadLauncher:
         tracked_values: LogFileRegexPair | FullFileTrackedValue,
         static: bool = False,
         custom_parser: typing.Callable | None = None,
+        parser_kwargs: typing.Dict | None = None,
         convert: bool = True,
         **_,
     ) -> None:
@@ -203,6 +204,7 @@ class FileThreadLauncher:
             lock: typing.Any | None = self._lock,
             static_read: bool = static,
             cstm_parser: typing.Callable | None = custom_parser,
+            kwargs: typing.Dict | None = parser_kwargs,
         ) -> None:
 
             _cached_metadata: typing.Dict[str, str | int] = {}
@@ -229,6 +231,7 @@ class FileThreadLauncher:
                     tracked_vals,
                     custom_parser=cstm_parser,
                     convert=convert,
+                    kwargs=kwargs,
                     **_cached_metadata,
                 )
 

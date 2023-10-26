@@ -171,7 +171,7 @@ class FileMonitor:
         _test_str += string.ascii_letters
         _test_str *= 100
         try:
-            _out = parser(_test_str, input_file=__file__, read_bytes=None)
+            _out = parser(_test_str, __input_file=__file__, __read_bytes=None)
         except Exception as e:
             raise AssertionError(f"Custom parser testing failed with exception:\n{e}")
         if len(_out) != 2:
@@ -206,6 +206,7 @@ class FileMonitor:
         path_glob_exprs: typing.List[str] | str,
         tracked_values: typing.List[str] | None = None,
         custom_parser: typing.Callable | None = None,
+        parser_kwargs: typing.Dict | None = None,
         static: bool = False,
     ) -> None:
         """Track a set of files.
@@ -225,6 +226,8 @@ class FileMonitor:
             within the file, by default None
         custom_parser : typing.Callable | None, optional
             provide a custom parsing function
+        parser_kwargs : typing.Dict | None, optional
+            arguments to include when running the specified custom parser
         static : bool, optional
             (if known) whether the given file(s) are written only once
             and so looped monitoring is not required, by default False
@@ -235,6 +238,7 @@ class FileMonitor:
                 "tracked_values": tracked_values,
                 "static": static,
                 "custom_parser": custom_parser,
+                "parser_kwargs": parser_kwargs,
             }
             self._file_globex.append(_parsing_dict)
         else:
@@ -244,6 +248,7 @@ class FileMonitor:
                     "tracked_values": tracked_values,
                     "static": static,
                     "custom_parser": custom_parser,
+                    "parser_kwargs": parser_kwargs,
                 }
                 for g in path_glob_exprs
             ]
@@ -258,6 +263,7 @@ class FileMonitor:
         tracked_values: typing.List[typing.Pattern] | None = None,
         labels: str | typing.List[str | None] | None = None,
         custom_parser: typing.Callable | None = None,
+        parser_kwargs: typing.Dict | None = None,
     ) -> None:
         """Tail a set of files.
 
@@ -298,6 +304,10 @@ class FileMonitor:
             define the label to assign to each value, if an element in the
             list is None, then a capture group is used. If labels itself is
             None, it is assumed all matches have a label capture group.
+        custom_parser : typing.Callable | None, optional
+            provide a custom parsing function
+        parser_kwargs : typing.Dict | None, optional
+            arguments to include when running the specified custom parser
         """
         if custom_parser:
             self._check_custom_log_parser(custom_parser)
@@ -340,6 +350,7 @@ class FileMonitor:
                 "tracked_values": _reg_lab_expr_pairing,
                 "static": False,
                 "custom_parser": custom_parser,
+                "parser_kwargs": parser_kwargs,
             }
             self._log_globex.append(_parsing_dict)
         else:
@@ -349,6 +360,7 @@ class FileMonitor:
                     "tracked_values": _reg_lab_expr_pairing,
                     "static": False,
                     "custom_parser": custom_parser,
+                    "parser_kwargs": parser_kwargs,
                 }
                 for g in path_glob_exprs
             ]
@@ -385,5 +397,5 @@ class FileMonitor:
         self._create_monitor_threads()
         return self
 
-    def __exit__(self, *args, **kwargs) -> None:
+    def __exit__(self, *_, **__) -> None:
         self._complete.set()

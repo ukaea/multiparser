@@ -4,12 +4,15 @@ import tempfile
 import time
 import typing
 import re
+import os.path
 import importlib.util
 
 import pytest
 from conftest import fake_csv, fake_feather, fake_nml, fake_toml
 
 import multiparser.parsing as mp_parse
+
+DATA_LIBRARY: str = os.path.join(os.path.dirname(__file__), "data")
 
 
 @pytest.mark.parsing

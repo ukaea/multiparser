@@ -131,7 +131,7 @@ def test_custom_data(stage: int, contains: typing.Tuple[str, ...]) -> None:
 
     @mp_parse.file_parser
     def _custom_parser(
-        input_file: str, **_
+        input_file: str
     ) -> typing.Tuple[typing.Dict[str, typing.Any], typing.Dict[str, typing.Any]]:
         _get_matrix = r"^[(\d+.\d+) *]{16}$"
         _initial_params_regex = r"^([\w_\(\)]+)\s*=\s*(\d+\.*\d*)$"
@@ -259,3 +259,23 @@ def test_parse_log_in_blocks() -> None:
             _process.start()
             monitor.run()
             _process.join()
+
+@pytest.mark.parsing
+def test_parse_h5() -> None:
+    _data_file: str = os.path.join(DATA_LIBRARY, "example.h5")
+
+    def custom_parser(file_name: str):
+        return pandas.read_hdf(file_name, key={"key": "my_group/my_dataset"}).to_dict()
+
+    with multiparser.FileMonitor(
+        per_thread_callback=lambda *_, **__: (),
+        log_level=logging.DEBUG
+    ) as monitor:
+        monitor.track(
+            _data_file,
+            custom_parser=custom_parser,
+            static=True
+        )
+        monitor.run()
+        monitor.terminate()
+    

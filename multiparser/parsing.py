@@ -78,18 +78,20 @@ def log_parser(parser: typing.Callable) -> typing.Callable:
     """
 
     def _wrapper(file_content, *args, **kwargs) -> TimeStampedData:
-        if "read_bytes" not in kwargs:
-            raise RuntimeError("Failed to retrieve argument 'read_bytes'")
-        if not (_input_file := kwargs.get("input_file")):
-            raise RuntimeError("Failed to retrieve argument 'input_file'")
+        if "__read_bytes" not in kwargs:
+            raise RuntimeError("Failed to retrieve argument '__read_bytes'")
+        if not (_input_file := kwargs.get("__input_file")):
+            raise RuntimeError("Failed to retrieve argument '__input_file'")
         _meta_data: typing.Dict[str, str] = {
             "timestamp": datetime.datetime.fromtimestamp(
                 os.path.getmtime(_input_file)
             ).strftime("%Y-%m-%d %H:%M:%S.%f"),
             "hostname": platform.node(),
             "file_name": _input_file,
-            "read_bytes": kwargs["read_bytes"],
+            "read_bytes": kwargs["__read_bytes"],
         }
+        del kwargs["__input_file"]
+        del kwargs["__read_bytes"]
         _meta, _data = parser(file_content, *args, **kwargs)
         return _meta | _meta_data, _data
 
@@ -97,37 +99,37 @@ def log_parser(parser: typing.Callable) -> typing.Callable:
 
 
 @file_parser
-def record_json(input_file: str, **_) -> TimeStampedData:
+def record_json(input_file: str) -> TimeStampedData:
     """Parse a JSON file"""
     return {}, json.load(open(input_file))
 
 
 @file_parser
-def record_yaml(input_file: str, **_) -> TimeStampedData:
+def record_yaml(input_file: str) -> TimeStampedData:
     """Parse a YAML file"""
     return {}, yaml.load(open(input_file), Loader=yaml.SafeLoader)
 
 
 @file_parser
-def record_pickle(input_file: str, **_) -> TimeStampedData:
+def record_pickle(input_file: str) -> TimeStampedData:
     """Parse a pickle file"""
     return {}, pickle.load(open(input_file, "rb"))
 
 
 @file_parser
-def record_fortran_nml(input_file: str, **_) -> TimeStampedData:
+def record_fortran_nml(input_file: str) -> TimeStampedData:
     """Parse a Fortran Named List"""
     return {}, f90nml.read(input_file)
 
 
 @file_parser
-def record_csv(input_file: str, **_) -> TimeStampedData:
+def record_csv(input_file: str) -> TimeStampedData:
     """Parse a comma separated values file"""
     return {}, pandas.read_csv(input_file).to_dict()
 
 
 @file_parser
-def record_feather(input_file: str, **_) -> TimeStampedData:
+def record_feather(input_file: str) -> TimeStampedData:
     """Parse a feather file"""
     if not pyarrow:
         raise ImportError("Module 'pyarrow' is required for feather file type")
@@ -135,7 +137,7 @@ def record_feather(input_file: str, **_) -> TimeStampedData:
 
 
 @file_parser
-def record_parquet(input_file: str, **_) -> TimeStampedData:
+def record_parquet(input_file: str) -> TimeStampedData:
     """Parse a parquet file"""
     if not pyarrow:
         raise ImportError("Module 'pyarrow' is required for parquet file type")
@@ -143,13 +145,7 @@ def record_parquet(input_file: str, **_) -> TimeStampedData:
 
 
 @file_parser
-def record_hdf(input_file: str, **_) -> TimeStampedData:
-    """Parse a HDF5 file"""
-    return {}, pandas.read_hdf(input_file).to_dict()
-
-
-@file_parser
-def record_toml(input_file: str, **_) -> TimeStampedData:
+def record_toml(input_file: str) -> TimeStampedData:
     """Parse a TOML file"""
     return {}, toml.load(input_file)
 
@@ -303,13 +299,13 @@ def record_log(
     if custom_parser:
         return [
             custom_parser(
-                "\n".join(_lines), input_file=input_file, read_bytes=_read_bytes
+                "\n".join(_lines), __input_file=input_file, __read_bytes=_read_bytes
             )
         ]
     return [
         _process_log_line(
-            input_file=input_file,
-            read_bytes=_read_bytes,
+            __input_file=input_file,
+            __read_bytes=_read_bytes,
             file_content=line,
             tracked_values=tracked_values,
             convert=convert,
@@ -322,7 +318,6 @@ SUFFIX_PARSERS: typing.Dict[typing.Tuple[str, ...], typing.Callable] = {
     ("csv",): record_csv,
     ("pkl", "pickle"): record_pickle,
     ("pqt",): record_parquet,
-    ("hdf", "h5", "hdf5"): record_hdf,
     ("toml",): record_toml,
     ("yaml", "yml"): record_yaml,
     ("nml",): record_fortran_nml,
