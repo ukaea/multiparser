@@ -1,4 +1,5 @@
 import contextlib
+import csv
 import datetime
 import json
 import os.path
@@ -6,19 +7,22 @@ import pickle
 import platform
 import typing
 
-with contextlib.suppress(ImportError):
-    pass
-
-with contextlib.suppress(ImportError):
+try:
     import f90nml
+except ImportError:
+    f90nml = None
 
 try:
     import pyarrow
 except ImportError:
     pyarrow = None
 
+try:
+    import pandas
+except ImportError:
+    pandas = None
+
 import loguru
-import pandas
 import toml
 import yaml
 
@@ -119,13 +123,17 @@ def record_pickle(input_file: str) -> TimeStampedData:
 @file_parser
 def record_fortran_nml(input_file: str) -> TimeStampedData:
     """Parse a Fortran Named List"""
+    if not f90nml:
+        raise ImportError("Module 'f90nml' is required for Fortran named list")
     return {}, f90nml.read(input_file)
 
 
 @file_parser
 def record_csv(input_file: str) -> TimeStampedData:
     """Parse a comma separated values file"""
-    return {}, pandas.read_csv(input_file).to_dict()
+    with open(input_file, newline="") as in_f:
+        _read_csv = csv.DictReader(in_f)
+        return {}, [row for row in _read_csv]
 
 
 @file_parser
@@ -133,6 +141,8 @@ def record_feather(input_file: str) -> TimeStampedData:
     """Parse a feather file"""
     if not pyarrow:
         raise ImportError("Module 'pyarrow' is required for feather file type")
+    if not pandas:
+        raise ImportError("Module 'pandas' is required for feather file type")
     return {}, pandas.read_feather(input_file).to_dict()
 
 
@@ -141,6 +151,8 @@ def record_parquet(input_file: str) -> TimeStampedData:
     """Parse a parquet file"""
     if not pyarrow:
         raise ImportError("Module 'pyarrow' is required for parquet file type")
+    if not pandas:
+        raise ImportError("Module 'pandas' is required for feather file type")
     return {}, pandas.read_parquet(input_file).to_dict()
 
 
@@ -358,22 +370,33 @@ def record_file(
     _tracked_vals: typing.List[typing.Pattern] | None = tracked_values or []
 
     def _do_parse(parse_func, in_file=input_file):
-        _parsed_data = parse_func(input_file=in_file)
+        _parsed = parse_func(input_file=in_file)
+        _meta, _data = _parsed
 
+        # Need to handle case where there is only one set of values and
+        # where there are multiple sets the same way
+        if not isinstance(_data, (tuple, list, set)):
+            _data: typing.List[typing.Dict[str, typing.Any]] = [_data]
+
+        # If no tracked values are stated return everything
         if not _tracked_vals:
-            return _parsed_data
+            return _parsed
 
-        _out_data: typing.Dict[str, typing.Any] = {}
+        # Filter by key through each set of values
+        _out_data: typing.List[typing.Dict[str, typing.Any]] = []
 
-        for tracked_val in tracked_values or []:
-            _out_data |= {
-                k: v
-                for k, v in _parsed_data[1].items()
-                if (isinstance(tracked_val, str) and tracked_val in k)
-                or (not isinstance(tracked_val, str) and tracked_val.findall(k))
-            }
+        for entry in _data:
+            _out_dict = {}
+            for tracked_val in tracked_values or []:
+                _out_dict |= {
+                    k: v
+                    for k, v in entry.items()
+                    if (isinstance(tracked_val, str) and tracked_val in k)
+                    or (not isinstance(tracked_val, str) and tracked_val.findall(k))
+                }
+            _out_data.append(_out_dict)
 
-        return _parsed_data[0], _out_data
+        return _meta, _out_data
 
     if custom_parser:
         return _do_parse(custom_parser)
@@ -384,6 +407,6 @@ def record_file(
             return _do_parse(parser)
 
     loguru.logger.error(
-        f"The file extension '{_extension}' is not supported for 'record_file', did you mean to use 'tail'?"
+        f"The file extension '{_extension}' is not supported for 'record_file' without custom parsing"
     )
     raise TypeError(f"File of type '{_extension}' could not be recognised")

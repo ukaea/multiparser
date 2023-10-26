@@ -30,17 +30,13 @@ def test_parse_f90nml() -> None:
 
 
 @pytest.mark.parsing
-@pytest.mark.skipif(
-    importlib.util.find_spec("f90nml") is None,
-    reason="Module 'pandas' not installed"
-)
 def test_parse_csv() -> None:
     with tempfile.TemporaryDirectory() as temp_d:
         _data_file = fake_csv(temp_d)
         _meta, _data = mp_parse.record_csv(input_file=_data_file)
         _, _data2 = mp_parse.record_file(_data_file, None, None)
         assert "timestamp" in _meta
-        assert list(sorted(_data.items())) == sorted(_data2.items())
+        assert sorted([i.items() for i in _data]) == sorted([i.items() for i in _data2])
 
 
 @pytest.mark.parsing

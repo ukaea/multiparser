@@ -12,10 +12,10 @@ The module is currently in development, to install it run:
 pip install <repository>
 ```
 
-To install optional extras `pandas`, `arrow`, `fortran` list them during the install, e.g.:
+To install optional extras `arrow` and `fortran` list them during the install, e.g.:
 
 ```sh
-pip install <repository>[pandas,arrow]
+pip install <repository>[fortran,arrow]
 ```
 
 ## The FileMonitor class
@@ -65,9 +65,9 @@ _Multiparser_ contains two methods for parsing, the first _lazy_ parsing will us
 * YAML
 * Pickle
 * Fortran-90 Named List (variables are read into a dictionary, requires "fortran" extra to be installed).
-* Feather (requires "pyarrow" extra to be installed)
-* Parquet (requires "pyarrow" extra to be installed)
-* CSV (requires "pandas" extra to be installed)
+* Feather (requires "arrow" extra to be installed)
+* Parquet (requires "arrow" extra to be installed)
+* CSV
 
 Custom parsing allows the user to specify their own function for extracting data, for more information see [_Creating Custom Parsers_](#creating-custom-parsers) below.
 
