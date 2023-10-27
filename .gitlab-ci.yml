@@ -118,6 +118,7 @@ pages:
   dependencies: ["pylint", "Unit Tests"]
   script:
     - mkdir -p public/files/media/
+    - mkdir -p public/files/logs/
     - mv htmlcov/* public/
     - mv code_quality_report.log public/files/logs/
     - mv code_quality.svg public/files/media/
