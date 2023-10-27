@@ -16,6 +16,7 @@ __copyright__ = "Copyright 2023, United Kingdom Atomic Energy Authority"
 import contextlib
 import csv
 import datetime
+import functools
 import json
 import os.path
 import pickle
@@ -70,6 +71,7 @@ def file_parser(parser: typing.Callable) -> typing.Callable:
         new parse function with metadata capturing
     """
 
+    @functools.wraps(parser)
     def _wrapper(input_file: str, *args, **kwargs) -> TimeStampedData:
         """Full file parser decorator"""
         _data: TimeStampedData = parser(input_file, *args, **kwargs)
@@ -81,6 +83,8 @@ def file_parser(parser: typing.Callable) -> typing.Callable:
             "file_name": input_file,
         }
         return _meta_data | _data[0], _data[1]
+
+    _wrapper.__name__ += "__mp_parser"
 
     return _wrapper
 
@@ -103,6 +107,7 @@ def log_parser(parser: typing.Callable) -> typing.Callable:
         new parse function with metadata capturing
     """
 
+    @functools.wraps(parser)
     def _wrapper(file_content, *args, **kwargs) -> TimeStampedData:
         """Log file parser decorator"""
         if "__read_bytes" not in kwargs:
@@ -122,6 +127,8 @@ def log_parser(parser: typing.Callable) -> typing.Callable:
         _meta, _data = parser(file_content, *args, **kwargs)
         return _meta | _meta_data, _data
 
+    _wrapper.__name__ += "__mp_parser"
+
     return _wrapper
 
 
@@ -139,11 +146,12 @@ def flatten_data(data: typing.Dict[str, typing.Any]) -> typing.Dict[str, typing.
         the data as a single level dictionary with '.' used as a delimiter for the
         key addresses
     """
-    _data = flatdict.FlatterDict(data, delimiter=".")
+    _data = dict(flatdict.FlatterDict(data, delimiter="."))
     return {
         key: value
-        for key, value in _data.items()
         if not isinstance(value, flatdict.FlatterDict)
+        else value.as_dict() or None
+        for key, value in _data.items()
     }
 
 
@@ -469,6 +477,7 @@ def record_file(
         for key, parser in SUFFIX_PARSERS.items():
             if _extension not in key:
                 continue
+            print(_extension, parser)
             return _full_file_parse(parser, input_file, _tracked_vals)
 
     loguru.logger.error(

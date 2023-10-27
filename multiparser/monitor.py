@@ -32,6 +32,15 @@ from multiparser.typing import FullFileTrackable, LogFileTrackable, TrackedValue
 __all__ = ["FileMonitor"]
 
 
+def _default_callback(
+    _: typing.Dict[str, typing.Any], meta: typing.Dict[str, typing.Any]
+) -> None:
+    """Default per file callback if none set globally or per file"""
+    loguru.logger.warning(
+        f"Changes detected but no callback set for {meta['file_name']}."
+    )
+
+
 class FileMonitor:
     """The FileMonitor class is used to monitor a directory for file changes
 
@@ -49,10 +58,11 @@ class FileMonitor:
 
     def __init__(
         self,
-        per_thread_callback: typing.Callable,
+        per_thread_callback: typing.Callable | None = None,
         exception_callback: typing.Callable | None = None,
         notification_callback: typing.Callable | None = None,
         termination_trigger: threading.Event | None = None,
+        timeout: int | None = None,
         lock_callbacks: bool = True,
         interval: float = 1e-3,
         log_level: int | str = logging.INFO,
@@ -64,8 +74,9 @@ class FileMonitor:
         ----------
         threads_recorder : typing.Dict
             Dictionary for caching values read from the file parsing threads
-        per_thread_callback : typing.Callable
+        per_thread_callback : typing.Callable, optional
             function to be executed whenever a monitored file is modified
+            this will apply globally to all files unless overwritten
         exception_callback : typing.Callable | None, optional
             function to be executed when an exception is thrown
         notification_callback : typing.Callable | None, optional
@@ -82,7 +93,8 @@ class FileMonitor:
             whether to convert data to a single level dictionary of key-value pairs
         """
         self._interval: float = interval
-        self._per_thread_callback = per_thread_callback
+        self._timeout: int | None = timeout
+        self._per_thread_callback = per_thread_callback or _default_callback
         self._notification_callback = notification_callback
         self._exception_callback = exception_callback
         self._file_threads_mutex: "threading.Lock | None" = (
@@ -124,7 +136,6 @@ class FileMonitor:
                 exclude_files_globex=exc_glob_exprs,
                 refresh_interval=interval,
                 file_list=file_list,
-                file_thread_callback=self._per_thread_callback,
                 file_thread_lock=self._file_threads_mutex,
                 file_thread_termination_trigger=termination_trigger,
                 exception_callback=self._exception_callback,
@@ -148,7 +159,6 @@ class FileMonitor:
                 exclude_files_globex=exc_glob_exprs,
                 refresh_interval=interval,
                 file_list=file_list,
-                file_thread_callback=self._per_thread_callback,
                 file_thread_lock=self._file_threads_mutex,
                 file_thread_termination_trigger=termination_trigger,
                 exception_callback=self._exception_callback,
@@ -200,7 +210,7 @@ class FileMonitor:
             raise AssertionError(
                 "Parser function must return two objects, a metadata dictionary and parsed values"
             )
-        if "_wrapper" not in parser.__name__:
+        if not parser.__name__.endswith("__mp_parser"):
             raise AssertionError(
                 "Parser function must be decorated using the multiparser.parser decorator"
             )
@@ -227,6 +237,7 @@ class FileMonitor:
         self,
         path_glob_exprs: typing.List[str] | str,
         tracked_values: TrackedValues | None = None,
+        callback: typing.Callable | None = None,
         custom_parser: typing.Callable | None = None,
         parser_kwargs: typing.Dict | None = None,
         static: bool = False,
@@ -247,6 +258,8 @@ class FileMonitor:
         tracked_values : typing.List[str] | None, optional
             a list of regular expressions defining variables to track
             within the file, by default None
+        callback : typing.Callable | None, optional
+            override the global per file callback
         custom_parser : typing.Callable | None, optional
             provide a custom parsing function
         parser_kwargs : typing.Dict | None, optional
@@ -266,6 +279,7 @@ class FileMonitor:
                 "custom_parser": custom_parser,
                 "parser_kwargs": parser_kwargs,
                 "file_type": file_type,
+                "callback": callback or self._per_thread_callback,
             }
             self._file_trackables.append(_parsing_dict)
         else:
@@ -277,6 +291,7 @@ class FileMonitor:
                     "custom_parser": custom_parser,
                     "parser_kwargs": parser_kwargs,
                     "file_type": file_type,
+                    "callback": callback or self._per_thread_callback,
                 }
                 for g in path_glob_exprs
             ]
@@ -292,6 +307,7 @@ class FileMonitor:
         path_glob_exprs: typing.List[str] | str,
         tracked_values: TrackedValues | None = None,
         labels: str | typing.List[str | None] | None = None,
+        callback: typing.Callable | None = None,
         custom_parser: typing.Callable | None = None,
         parser_kwargs: typing.Dict | None = None,
     ) -> None:
@@ -334,6 +350,8 @@ class FileMonitor:
             define the label to assign to each value, if an element in the
             list is None, then a capture group is used. If labels itself is
             None, it is assumed all matches have a label capture group.
+        callback : typing.Callable | None, optional
+            override the global per file callback
         custom_parser : typing.Callable | None, optional
             provide a custom parsing function
         parser_kwargs : typing.Dict | None, optional
@@ -393,6 +411,7 @@ class FileMonitor:
                 "static": False,
                 "custom_parser": custom_parser,
                 "parser_kwargs": parser_kwargs,
+                "callback": callback or self._per_thread_callback,
             }
             self._log_trackables.append(_parsing_dict)
         else:
@@ -403,6 +422,7 @@ class FileMonitor:
                     "static": False,
                     "custom_parser": custom_parser,
                     "parser_kwargs": parser_kwargs,
+                    "callback": callback or self._per_thread_callback,
                 }
                 for g in path_glob_exprs
             ]
@@ -424,8 +444,8 @@ class FileMonitor:
         if not self._file_monitor_thread or not self._log_monitor_thread:
             raise AssertionError("FileMonitor must be used as a context manager.")
 
-        self._file_monitor_thread.join()
-        self._log_monitor_thread.join()
+        self._file_monitor_thread.join(self._timeout)
+        self._log_monitor_thread.join(self._timeout)
 
         if not self._known_files:
             loguru.logger.warning("No files were processed during this session.")

@@ -119,7 +119,6 @@ class FileThreadLauncher:
 
     def __init__(
         self,
-        file_thread_callback: typing.Callable,
         file_thread_termination_trigger: threading.Event,
         parsing_callback: typing.Callable,
         notification_callback: typing.Callable,
@@ -135,9 +134,6 @@ class FileThreadLauncher:
 
         Parameters
         ----------
-        file_thread_callback : typing.Callable
-            the callback function to be triggered whenever a change is detected
-            to a monitored file
         file_thread_termination_trigger : threading.Event
             threading event which when set will trigger termination of all file
             monitor loops
@@ -165,7 +161,6 @@ class FileThreadLauncher:
             whether to convert data to a single level dictionary of key-value pairs
         """
         self._trackables: TrackableList = trackables
-        self._per_thread_callback: typing.Callable = file_thread_callback
         self._exception_callback: typing.Callable | None = exception_callback
         self._lock: typing.Any | None = file_thread_lock
         self._termination_trigger: threading.Event = file_thread_termination_trigger
@@ -183,6 +178,7 @@ class FileThreadLauncher:
         file_name: str,
         flatten_data: bool,
         tracked_values: Trackable,
+        callback: typing.Callable,
         static: bool = False,
         custom_parser: typing.Callable | None = None,
         parser_kwargs: typing.Dict | None = None,
@@ -208,7 +204,7 @@ class FileThreadLauncher:
 
         def _read_action(
             records: typing.List[typing.Tuple[str, str]],
-            monitor_callback: typing.Callable = self._per_thread_callback,
+            monitor_callback: typing.Callable = callback,
             file_name: str = file_name,
             termination_trigger: threading.Event = self._termination_trigger,
             interval: float = self._interval,
@@ -271,10 +267,10 @@ class FileThreadLauncher:
                     if not _data:
                         continue
 
-                    loguru.logger.debug(f"{file_name}: Recorded: {_data}")
-
                     if flatten_data:
-                        mp_parse.flatten_data(_data)
+                        _data = mp_parse.flatten_data(_data)
+
+                    loguru.logger.debug(f"{file_name}: Recorded: {_data}")
 
                     if lock:
                         with lock:
@@ -361,7 +357,6 @@ class LogFileThreadLauncher(FileThreadLauncher):
     def __init__(
         self,
         trackables: typing.List[LogFileTrackable],
-        file_thread_callback: typing.Callable,
         file_thread_termination_trigger: threading.Event,
         refresh_interval: float,
         exclude_files_globex: typing.List[str] | None,
@@ -380,8 +375,6 @@ class LogFileThreadLauncher(FileThreadLauncher):
                 - globular expressions of files to monitor
                 - regex defining the variables to track
                 - whether the file is static (written once) or changing.
-        file_thread_callback : typing.Callable
-            the function to call when a file is modified
         file_thread_termination_trigger : threading.Event
             threading event which when set will trigger termination of all file
             monitor loops
@@ -404,7 +397,6 @@ class LogFileThreadLauncher(FileThreadLauncher):
         """
 
         super().__init__(
-            file_thread_callback=file_thread_callback,
             parsing_callback=mp_parse.record_log,
             refresh_interval=refresh_interval,
             file_thread_lock=file_thread_lock,
@@ -429,7 +421,6 @@ class FullFileThreadLauncher(FileThreadLauncher):
     def __init__(
         self,
         trackables: typing.List[FullFileTrackable],
-        file_thread_callback: typing.Callable,
         file_thread_termination_trigger: threading.Event,
         refresh_interval: float,
         exclude_files_globex: typing.List[str] | None,
@@ -449,8 +440,6 @@ class FullFileThreadLauncher(FileThreadLauncher):
                 - regex defining the variables to track
                 - custom parser
                 - whether the file is static (written once) or changing.
-        file_thread_callback : typing.Callable
-            the function to call when a file is modified
         file_thread_termination_trigger : threading.Event
             threading event which when set will trigger termination of all file
             monitor loops
@@ -473,7 +462,6 @@ class FullFileThreadLauncher(FileThreadLauncher):
         """
 
         super().__init__(
-            file_thread_callback=file_thread_callback,
             parsing_callback=mp_parse.record_file,
             refresh_interval=refresh_interval,
             trackables=trackables,
