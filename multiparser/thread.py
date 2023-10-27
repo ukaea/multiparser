@@ -14,7 +14,6 @@ __maintainer__ = "Kristian Zarebski"
 __email__ = "kristian.zarebski@ukaea.uk"
 __copyright__ = "Copyright 2023, United Kingdom Atomic Energy Authority"
 
-
 import datetime
 import functools
 import glob
@@ -27,7 +26,12 @@ import loguru
 
 import multiparser.exceptions as mp_exc
 import multiparser.parsing as mp_parse
-from multiparser.typing import FullFileTrackedValue, LogFileRegexPair
+from multiparser.typing import (
+    FullFileTrackable,
+    LogFileTrackable,
+    Trackable,
+    TrackableList,
+)
 
 
 class HandledThread(threading.Thread):
@@ -61,7 +65,10 @@ class HandledThread(threading.Thread):
         """Wrap the thread target in order to store any exception throws"""
 
         def wrapper(func: typing.Callable) -> typing.Callable:
+            """Thread target wrapper for exception capture"""
+
             def _inner(*args, **kwargs) -> typing.Any:
+                """Exception capture for thread target call"""
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
@@ -93,6 +100,7 @@ def abort_on_fail(function: typing.Callable) -> typing.Callable:
 
     @functools.wraps(function)
     def _wrapper(self: "FileThreadLauncher", *args, **kwargs) -> typing.Any:
+        """Decorator to trigger termination event if exception thrown"""
         try:
             return function(self, *args, **kwargs)
         except Exception as e:
@@ -116,11 +124,12 @@ class FileThreadLauncher:
         parsing_callback: typing.Callable,
         notification_callback: typing.Callable,
         refresh_interval: float,
-        trackables: typing.List[LogFileRegexPair | FullFileTrackedValue],
+        trackables: TrackableList,
         exclude_files_globex: typing.List[str] | None,
         exception_callback: typing.Callable | None = None,
         file_thread_lock: typing.Any | None = None,
         file_list: typing.List[str] | None = None,
+        flatten_data: bool = False,
     ) -> None:
         """Create a new instance of the file monitor thread launcher.
 
@@ -138,7 +147,7 @@ class FileThreadLauncher:
             function called to notify when a new file is detected
         refresh_interval : float
             how often to check for new files
-        trackables : typing.List[LogFileRegexPair  |  FullFileTrackedValue]
+        trackables : typing.List[LogFileTrackable  |  FullFileTrackable]
             a tuple containing:
                 - globular expression for file capture
                 - regular_expressions for variable tracking within files
@@ -152,10 +161,10 @@ class FileThreadLauncher:
         file_thread_lock : threading.Lock, optional
             shared mutex to prevent the callback being called simultaneously by
             multiple threads.
+        flatten_data : bool, optional
+            whether to convert data to a single level dictionary of key-value pairs
         """
-        self._trackables: typing.List[
-            LogFileRegexPair | FullFileTrackedValue
-        ] = trackables
+        self._trackables: TrackableList = trackables
         self._per_thread_callback: typing.Callable = file_thread_callback
         self._exception_callback: typing.Callable | None = exception_callback
         self._lock: typing.Any | None = file_thread_lock
@@ -167,15 +176,18 @@ class FileThreadLauncher:
         self._records: typing.List[typing.Tuple[str, str]] = []
         self._interval = refresh_interval
         self._monitored_files = file_list if file_list is not None else []
+        self._flatten_data = flatten_data
 
     def _append_thread(
         self,
         file_name: str,
-        tracked_values: LogFileRegexPair | FullFileTrackedValue,
+        flatten_data: bool,
+        tracked_values: Trackable,
         static: bool = False,
         custom_parser: typing.Callable | None = None,
         parser_kwargs: typing.Dict | None = None,
         convert: bool = True,
+        file_type: str | None = None,
         **_,
     ) -> None:
         """Create a new thread for a monitored file
@@ -184,7 +196,7 @@ class FileThreadLauncher:
         ----------
         file_name : str
             name of the file to observe
-        tracked_values : LogFileRegexPair | FullFileTrackedValue
+        tracked_values : Trackable
             values to monitor within the given file
         static : bool, optional
             whether the file is written only once, by default False
@@ -200,12 +212,14 @@ class FileThreadLauncher:
             file_name: str = file_name,
             termination_trigger: threading.Event = self._termination_trigger,
             interval: float = self._interval,
-            tracked_vals: LogFileRegexPair | FullFileTrackedValue = tracked_values,
+            tracked_vals: Trackable = tracked_values,
             lock: typing.Any | None = self._lock,
             static_read: bool = static,
             cstm_parser: typing.Callable | None = custom_parser,
             kwargs: typing.Dict | None = parser_kwargs,
+            flatten_data: bool = flatten_data,
         ) -> None:
+            """Thread target function for parsing of detected file"""
 
             _cached_metadata: typing.Dict[str, str | int] = {}
 
@@ -232,6 +246,7 @@ class FileThreadLauncher:
                     custom_parser=cstm_parser,
                     convert=convert,
                     kwargs=kwargs,
+                    file_type=file_type,
                     **_cached_metadata,
                 )
 
@@ -257,6 +272,9 @@ class FileThreadLauncher:
                         continue
 
                     loguru.logger.debug(f"{file_name}: Recorded: {_data}")
+
+                    if flatten_data:
+                        mp_parse.flatten_data(_data)
 
                     if lock:
                         with lock:
@@ -286,7 +304,11 @@ class FileThreadLauncher:
                 # Check for multiple tracking entries for the same file
                 # not allowed due to constraint of one thread spawned per file
                 _registered_files: typing.List[str] = []
-                for file in glob.glob(trackable["glob_exprs"]):
+                if not isinstance((_glob_str := trackable["glob_expr"]), str):
+                    raise AssertionError(
+                        f"Expected type AnyStr for globular expression but got '{_glob_str}'"
+                    )
+                for file in glob.glob(_glob_str):
                     if file in _registered_files:
                         raise AssertionError(
                             "Conflicting globular expressions. "
@@ -295,7 +317,7 @@ class FileThreadLauncher:
                     if file not in self._file_threads and file not in _excludes:
                         self._notifier(file)
                         self._monitored_files.append(file)
-                        self._append_thread(file, **trackable)
+                        self._append_thread(file, self._flatten_data, **trackable)
                         self._file_threads[file].start()
                         _registered_files.append(file)
 
@@ -325,6 +347,7 @@ class FileThreadLauncher:
         raise mp_exc.SessionFailure(_exceptions)
 
     def abort(self) -> None:
+        """Terminate the thread launcher"""
         self._raise_exceptions()
 
 
@@ -337,7 +360,7 @@ class LogFileThreadLauncher(FileThreadLauncher):
 
     def __init__(
         self,
-        trackables: typing.List[LogFileRegexPair],
+        trackables: typing.List[LogFileTrackable],
         file_thread_callback: typing.Callable,
         file_thread_termination_trigger: threading.Event,
         refresh_interval: float,
@@ -346,12 +369,13 @@ class LogFileThreadLauncher(FileThreadLauncher):
         notification_callback: typing.Callable | None = None,
         file_list: typing.List[str] | None = None,
         file_thread_lock: typing.Any | None = None,
+        flatten_data: bool = False,
     ) -> None:
         """Initialise a log file monitor thread launcher.
 
         Parameters
         ----------
-        trackables : typing.List[LogFileRegexPair]
+        trackables : typing.List[LogFileTrackable]
             list of tuples containing:
                 - globular expressions of files to monitor
                 - regex defining the variables to track
@@ -375,6 +399,8 @@ class LogFileThreadLauncher(FileThreadLauncher):
         file_thread_lock : threading.Lock, optional
             shared mutex to prevent the callback being called simultaneously by
             multiple threads.
+        flatten_data : bool, optional
+            whether to convert data to a single level dictionary of key-value pairs
         """
 
         super().__init__(
@@ -389,6 +415,7 @@ class LogFileThreadLauncher(FileThreadLauncher):
             file_list=file_list,
             file_thread_termination_trigger=file_thread_termination_trigger,
             exception_callback=exception_callback,
+            flatten_data=flatten_data,
         )
 
 
@@ -401,21 +428,22 @@ class FullFileThreadLauncher(FileThreadLauncher):
 
     def __init__(
         self,
-        trackables: typing.List[FullFileTrackedValue],
+        trackables: typing.List[FullFileTrackable],
         file_thread_callback: typing.Callable,
-        file_thread_lock: threading.Lock,
         file_thread_termination_trigger: threading.Event,
         refresh_interval: float,
         exclude_files_globex: typing.List[str] | None,
         exception_callback: typing.Callable | None = None,
         notification_callback: typing.Callable | None = None,
         file_list: typing.List[str] | None = None,
+        file_thread_lock: threading.Lock | None = None,
+        flatten_data: bool = False,
     ) -> None:
         """Initialise a full file monitor thread launcher.
 
         Parameters
         ----------
-        trackables : typing.List[FullFileTrackedValue]
+        trackables : typing.List[FullFileTrackable]
             Dictionary containing:
                 - globular expressions of files to monitor
                 - regex defining the variables to track
@@ -440,6 +468,8 @@ class FullFileThreadLauncher(FileThreadLauncher):
         file_thread_lock : threading.Lock, optional
             shared mutex to prevent the callback being called simultaneously by
             multiple threads.
+        flatten_data : bool, optional
+            whether to convert data to a single level dictionary of key-value pairs
         """
 
         super().__init__(
@@ -454,4 +484,5 @@ class FullFileThreadLauncher(FileThreadLauncher):
             file_thread_lock=file_thread_lock,
             file_thread_termination_trigger=file_thread_termination_trigger,
             exception_callback=exception_callback,
+            flatten_data=flatten_data,
         )

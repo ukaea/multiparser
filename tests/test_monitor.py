@@ -253,7 +253,7 @@ def test_parse_log_in_blocks() -> None:
             log_level=logging.DEBUG
         ) as monitor:
             monitor.tail(
-                temp_f.name,
+                [temp_f.name],
                 custom_parser=custom_parser
             )
             _process.start()

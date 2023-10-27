@@ -1,3 +1,18 @@
+"""
+Multiparser Parsing
+===================
+
+Contains functions and decorators for parsing of file data either reading the
+file in its entirety or reading the latest written content. The contents are
+sent to a dictionary.
+
+"""
+__date__ = "2023-10-16"
+__author__ = "Kristian Zarebski"
+__maintainer__ = "Kristian Zarebski"
+__email__ = "kristian.zarebski@ukaea.uk"
+__copyright__ = "Copyright 2023, United Kingdom Atomic Energy Authority"
+
 import contextlib
 import csv
 import datetime
@@ -11,6 +26,11 @@ try:
     import f90nml
 except ImportError:
     f90nml = None
+
+try:
+    import flatdict
+except ImportError:
+    flatdict = None
 
 try:
     import pyarrow
@@ -27,7 +47,8 @@ import toml
 import yaml
 
 TimeStampedData = typing.Tuple[
-    typing.Dict[str, str | int], typing.Dict[str, typing.Any]
+    typing.Dict[str, str | int],
+    typing.Dict[str, typing.Any] | typing.List[typing.Dict[str, typing.Any]],
 ]
 
 
@@ -50,6 +71,7 @@ def file_parser(parser: typing.Callable) -> typing.Callable:
     """
 
     def _wrapper(input_file: str, *args, **kwargs) -> TimeStampedData:
+        """Full file parser decorator"""
         _data: TimeStampedData = parser(input_file, *args, **kwargs)
         _meta_data: typing.Dict[str, str] = {
             "timestamp": datetime.datetime.fromtimestamp(
@@ -82,6 +104,7 @@ def log_parser(parser: typing.Callable) -> typing.Callable:
     """
 
     def _wrapper(file_content, *args, **kwargs) -> TimeStampedData:
+        """Log file parser decorator"""
         if "__read_bytes" not in kwargs:
             raise RuntimeError("Failed to retrieve argument '__read_bytes'")
         if not (_input_file := kwargs.get("__input_file")):
@@ -100,6 +123,28 @@ def log_parser(parser: typing.Callable) -> typing.Callable:
         return _meta | _meta_data, _data
 
     return _wrapper
+
+
+def flatten_data(data: typing.Dict[str, typing.Any]) -> typing.Dict[str, typing.Any]:
+    """Flatten dictionary into a single level of key-value pairs
+
+    Parameters
+    ----------
+    data : typing.Dict[str, typing.Any]
+        the data to flatten
+
+    Returns
+    -------
+    typing.Dict[str, typing.Any]
+        the data as a single level dictionary with '.' used as a delimiter for the
+        key addresses
+    """
+    _data = flatdict.FlatterDict(data, delimiter=".")
+    return {
+        key: value
+        for key, value in _data.items()
+        if not isinstance(value, flatdict.FlatterDict)
+    }
 
 
 @file_parser
@@ -125,7 +170,10 @@ def record_fortran_nml(input_file: str) -> TimeStampedData:
     """Parse a Fortran Named List"""
     if not f90nml:
         raise ImportError("Module 'f90nml' is required for Fortran named list")
-    return {}, f90nml.read(input_file)
+    if not flatdict:
+        raise ImportError("Module 'flatdict' is required for Fortran named list")
+
+    return {}, dict(f90nml.read(input_file).todict())
 
 
 @file_parser
@@ -196,6 +244,7 @@ def _process_log_line(
     _out_data: typing.Dict[str, typing.Any] = {}
 
     def _converter(value: str) -> typing.Any:
+        """Convert from string to numeric type"""
         with contextlib.suppress(ValueError):
             _int_val = int(value)
             return _int_val
@@ -337,10 +386,45 @@ SUFFIX_PARSERS: typing.Dict[typing.Tuple[str, ...], typing.Callable] = {
 }
 
 
+def _full_file_parse(parse_func, in_file, tracked_values) -> TimeStampedData:
+    """Apply specific parser to a file"""
+    _data: typing.List[typing.Dict[str, typing.Any]]
+    _meta: typing.Dict[str, typing.Any]
+
+    _parsed = parse_func(input_file=in_file)
+    _meta, _data = _parsed
+
+    # Need to handle case where there is only one set of values and
+    # where there are multiple sets the same way
+    if not isinstance(_data, (tuple, list, set)):
+        _data = [_data]
+
+    # If no tracked values are stated return everything
+    if not tracked_values:
+        return _parsed
+
+    # Filter by key through each set of values
+    _out_data: typing.List[typing.Dict[str, typing.Any]] = []
+
+    for entry in _data:
+        _out_data_entry: typing.Dict[str, typing.Any] = {}
+        for tracked_val in tracked_values or []:
+            _out_data_entry |= {
+                k: v
+                for k, v in entry.items()
+                if (isinstance(tracked_val, str) and tracked_val in k)
+                or (not isinstance(tracked_val, str) and tracked_val.findall(k))
+            }
+        _out_data.append(_out_data_entry)
+
+    return _meta, _out_data
+
+
 def record_file(
     input_file: str,
     tracked_values: typing.List[typing.Pattern] | None,
     custom_parser: typing.Callable | None,
+    file_type: str | None,
     **_,
 ) -> TimeStampedData:
     """Record a recognised file, parsing its contents.
@@ -354,6 +438,10 @@ def record_file(
         the file to parse
     tracked_values : typing.List[typing.Pattern] | None
         regular expressions defining the values to be monitored, by default None
+    custom_parser : typing.Callable | None
+        a custom parser to use for the given file
+    file_type : str | None
+        override the parser by file extension choice
 
     Returns
     -------
@@ -366,45 +454,16 @@ def record_file(
     TypeError
         if the given file type is not recognised
     """
-    _extension: str = os.path.splitext(input_file)[1].replace(".", "")
+    _extension: str = file_type or os.path.splitext(input_file)[1].replace(".", "")
     _tracked_vals: typing.List[typing.Pattern] | None = tracked_values or []
 
-    def _do_parse(parse_func, in_file=input_file):
-        _parsed = parse_func(input_file=in_file)
-        _meta, _data = _parsed
-
-        # Need to handle case where there is only one set of values and
-        # where there are multiple sets the same way
-        if not isinstance(_data, (tuple, list, set)):
-            _data: typing.List[typing.Dict[str, typing.Any]] = [_data]
-
-        # If no tracked values are stated return everything
-        if not _tracked_vals:
-            return _parsed
-
-        # Filter by key through each set of values
-        _out_data: typing.List[typing.Dict[str, typing.Any]] = []
-
-        for entry in _data:
-            _out_dict = {}
-            for tracked_val in tracked_values or []:
-                _out_dict |= {
-                    k: v
-                    for k, v in entry.items()
-                    if (isinstance(tracked_val, str) and tracked_val in k)
-                    or (not isinstance(tracked_val, str) and tracked_val.findall(k))
-                }
-            _out_data.append(_out_dict)
-
-        return _meta, _out_data
-
     if custom_parser:
-        return _do_parse(custom_parser)
+        return _full_file_parse(custom_parser, input_file, _tracked_vals)
     else:
         for key, parser in SUFFIX_PARSERS.items():
             if _extension not in key:
                 continue
-            return _do_parse(parser)
+            return _full_file_parse(parser, input_file, _tracked_vals)
 
     loguru.logger.error(
         f"The file extension '{_extension}' is not supported for 'record_file' without custom parsing"

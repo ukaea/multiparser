@@ -27,6 +27,7 @@ with FileMonitor(
     per_thread_callback=callback_function,
     lock_callback=True,
     interval=10.0,
+    flatten_data=True
 ) as monitor:
     monitor.track(
         path_glob_exprs=["file_of_interest.toml", "out_dir/*.other"],
@@ -56,6 +57,9 @@ monitor.tail(
     labels=["My Parameter"]
 )
 ```
+
+The option `flatten_data` will flatten the recorded values into a single level key-value dictionary, by default this is set to `False`. This has been added for cases whereby callbacks rely on such a structure, for more control over the structure of outputs see [custom parsing](#creating-custom-parsers).
+
 
 ### "Lazy" vs Custom Parsing
 
