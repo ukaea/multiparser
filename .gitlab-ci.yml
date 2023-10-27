@@ -44,7 +44,7 @@ Unit Tests:
   <<: *setup_unit
   script:
     - poetry config virtualenvs.in-project true
-    - poetry run pytest tests --cov=multiparser --cov-report=xml
+    - poetry run pytest tests --cov=multiparser --cov-report=xml --cov-report=term
   artifacts:
     untracked: false
     expire_in: "1 hr"
