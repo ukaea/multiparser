@@ -24,7 +24,7 @@ def test_parse_f90nml() -> None:
     with tempfile.TemporaryDirectory() as temp_d:
         _data_file = fake_nml(temp_d)
         _meta, _data = mp_parse.record_fortran_nml(input_file=_data_file)
-        _, _data2 = mp_parse.record_file(_data_file, None, None)
+        _, _data2 = mp_parse.record_file(_data_file, None, None, None)
         assert "timestamp" in _meta
         assert list(sorted(_data.items())) == sorted(_data2.items())
 
@@ -34,7 +34,7 @@ def test_parse_csv() -> None:
     with tempfile.TemporaryDirectory() as temp_d:
         _data_file = fake_csv(temp_d)
         _meta, _data = mp_parse.record_csv(input_file=_data_file)
-        _, _data2 = mp_parse.record_file(_data_file, None, None)
+        _, _data2 = mp_parse.record_file(_data_file, None, None, None)
         assert "timestamp" in _meta
         assert sorted([i.items() for i in _data]) == sorted([i.items() for i in _data2])
 
@@ -56,7 +56,7 @@ def test_parse_toml() -> None:
     with tempfile.TemporaryDirectory() as temp_d:
         _data_file = fake_toml(temp_d)
         _meta, _data = mp_parse.record_toml(input_file=_data_file)
-        _, _data2 = mp_parse.record_file(_data_file, None, None)
+        _, _data2 = mp_parse.record_file(_data_file, None, None, None)
         assert "timestamp" in _meta
         assert list(sorted(_data.items())) == sorted(_data2.items())
 
