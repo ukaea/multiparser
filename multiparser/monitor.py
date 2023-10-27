@@ -85,7 +85,7 @@ class FileMonitor:
         self._per_thread_callback = per_thread_callback
         self._notification_callback = notification_callback
         self._exception_callback = exception_callback
-        self._file_threads_mutex: threading.Lock | None = (
+        self._file_threads_mutex: "threading.Lock | None" = (
             threading.Lock() if lock_callbacks else None
         )
         self._manual_abort: bool = termination_trigger is not None

@@ -436,7 +436,7 @@ class FullFileThreadLauncher(FileThreadLauncher):
         exception_callback: typing.Callable | None = None,
         notification_callback: typing.Callable | None = None,
         file_list: typing.List[str] | None = None,
-        file_thread_lock: threading.Lock | None = None,
+        file_thread_lock: "threading.Lock | None" = None,
         flatten_data: bool = False,
     ) -> None:
         """Initialise a full file monitor thread launcher.
