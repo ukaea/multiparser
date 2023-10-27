@@ -20,6 +20,7 @@ import multiparser
 import multiparser.exceptions as mp_exc
 import multiparser.thread as mp_thread
 import multiparser.parsing as mp_parse
+from tests.conftest import fake_feather, fake_json, fake_parquet, fake_pickle, fake_yaml
 
 
 DATA_LIBRARY: str = os.path.join(os.path.dirname(__file__), "data")
@@ -35,15 +36,33 @@ DATA_LIBRARY: str = os.path.join(os.path.dirname(__file__), "data")
         None,
     ),
 )
+@pytest.mark.parametrize(
+    "fake_log", [
+        (True, None)
+    ],
+    indirect=True,
+)
 def test_run_on_directory_all(
     fake_log, exception: str | None, mocker: pytest_mock.MockerFixture
 ) -> None:
     _interval: float = 0.1
+    _fakers: typing.Tuple[typing.Callable, ...] = (
+        fake_csv,
+        fake_nml,
+        fake_toml,
+        fake_feather,
+        fake_json,
+        fake_yaml,
+        fake_pickle,
+        fake_parquet
+    )
     with tempfile.TemporaryDirectory() as temp_d:
+        for faker in _fakers:
+            faker(temp_d)
         for _ in range(8):
-            random.choice([fake_csv, fake_nml, fake_toml])(temp_d)
+            random.choice(_fakers)(temp_d)
 
-        def per_thread_callback(data, meta, exception=exception):
+        def per_thread_callback(_, __, exception=exception):
             if exception == "file_thread_exception":
                 raise TypeError("Oh dear!")
 
@@ -58,11 +77,11 @@ def test_run_on_directory_all(
             mocker.patch.object(mp_thread.FileThreadLauncher, "run", fail_run)
 
         with multiparser.FileMonitor(
-            per_thread_callback, interval=_interval, log_level=logging.DEBUG
+            per_thread_callback, interval=_interval, log_level=logging.INFO
         ) as monitor:
             monitor.track(os.path.join(temp_d, "*"))
             monitor.exclude(os.path.join(temp_d, "*.toml"))
-            monitor.tail(*fake_log)
+            monitor.tail(**fake_log)
             monitor.run()
             for _ in range(10):
                 time.sleep(_interval)
@@ -109,7 +128,7 @@ def test_run_on_directory_filtered() -> None:
             )
 
         with multiparser.FileMonitor(
-            per_thread_callback, interval=_interval
+            per_thread_callback, interval=_interval, flatten_data=True
         ) as monitor:
             monitor.track(_csv_file, ["d_other", re.compile("\w_value")])
             monitor.track(_nml_file, [re.compile("\w_val_\w")])

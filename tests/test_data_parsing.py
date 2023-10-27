@@ -3,7 +3,6 @@ import string
 import tempfile
 import time
 import typing
-import re
 import os.path
 import importlib.util
 
@@ -88,11 +87,37 @@ def test_file_block_read() -> None:
 
 
 @pytest.mark.parsing
-def test_parse_log(
-    fake_log: typing.Tuple[str, typing.List[typing.Tuple[None, str]]]
-) -> None:
-    _file, _regex, _labels = fake_log
+@pytest.mark.parametrize(
+    "fake_log", [
+        (True, None),
+        (False, None),
+        (True, 2),
+        (False, 2),
+        (True, 3),
+        (False, 3)
+    ],
+    indirect=True,
+    ids=(
+        "labels-no_capture",
+        "no_labels-no_capture",
+        "labels-capture-2",
+        "no_labels-capture-2",
+        "labels-capture-3",
+        "no_labels-capture-3",
+    )
+)
+def test_parse_log(fake_log, request) -> None:
+    _fail_cases = ["no_labels-no_capture", "no_labels-capture-3", "labels-capture-3"]
+    _id = request.node.name
+    
+    _file, _regex, _labels = fake_log.values()
     _regex_pairs = [(i, re.compile(j)) for i, j in zip(_labels, _regex)]
-    for _ in range(10):
-        time.sleep(0.1)
-        mp_parse.record_log(input_file=_file, tracked_values=_regex_pairs)
+    if _id in [f"test_parse_log[{i}]" for i in _fail_cases]:
+        with pytest.raises(ValueError):
+            for _ in range(10):
+                time.sleep(0.1)
+                mp_parse.record_log(input_file=_file, tracked_values=_regex_pairs)
+    else:
+        for _ in range(10):
+            time.sleep(0.1)
+            mp_parse.record_log(input_file=_file, tracked_values=_regex_pairs)

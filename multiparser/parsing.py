@@ -276,9 +276,14 @@ def _process_log_line(
                     _label: str = label
                 elif len(result) == 2:
                     _label, _value_str = result
+
+                    # If the user has provided a label as well
+                    # as regex capturing a label, the provided
+                    # value takes precedence
+                    _label = label or _label
                 else:
                     raise ValueError(
-                        f"{_type} '{tracked_val}' with label assignment must return a value"
+                        f"{_type} '{tracked_val}' with label assignment must return a single value"
                     )
             elif not label:
                 if len(result) != 2:
@@ -377,12 +382,13 @@ def record_log(
 
 SUFFIX_PARSERS: typing.Dict[typing.Tuple[str, ...], typing.Callable] = {
     ("csv",): record_csv,
-    ("pkl", "pickle"): record_pickle,
-    ("pqt",): record_parquet,
+    ("pkl", "pickle", "pckl"): record_pickle,
+    ("pqt", "parquet"): record_parquet,
     ("toml",): record_toml,
     ("yaml", "yml"): record_yaml,
-    ("nml",): record_fortran_nml,
+    ("nml", "fortran"): record_fortran_nml,
     ("json",): record_json,
+    ("ft", "feather"): record_feather,
 }
 
 

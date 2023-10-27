@@ -5,6 +5,9 @@ import string
 import tempfile
 import time
 import typing
+import json
+import yaml
+import pickle
 
 import pandas
 import pytest
@@ -35,6 +38,14 @@ def fake_feather(output_dir: str, file_name: str | None = None) -> str:
     return _file_name
 
 
+def fake_parquet(output_dir: str, file_name: str | None = None) -> str:
+    _file_name: str = file_name or os.path.join(output_dir, rand_str() + ".pqt")
+    pandas.DataFrame(
+        {rand_str(): [random.randint(0, 100) for _ in range(100)]}
+    ).to_parquet(_file_name)
+    return _file_name
+
+
 def fake_toml(output_dir: str, file_name: str | None = None) -> str:
     _file_name: str = file_name or os.path.join(output_dir, rand_str()) + ".toml"
     toml.dump(
@@ -44,7 +55,34 @@ def fake_toml(output_dir: str, file_name: str | None = None) -> str:
     return _file_name
 
 
-def fake_nml(output_dir: str, file_name: str | None = None) -> str:
+def fake_json(output_dir: str, file_name: str | None = None) -> str:
+    _file_name: str = file_name or os.path.join(output_dir, rand_str()) + ".json"
+    json.dump(
+        {rand_str(): [random.randint(0, 100) for _ in range(100)]},
+        open(_file_name, "w"),
+    )
+    return _file_name
+
+
+def fake_yaml(output_dir: str, file_name: str | None = None) -> str:
+    _file_name: str = file_name or os.path.join(output_dir, rand_str()) + ".yml"
+    yaml.dump(
+        {rand_str(): [random.randint(0, 100) for _ in range(100)]},
+        open(_file_name, "w"),
+    )
+    return _file_name
+
+
+def fake_pickle(output_dir: str, file_name: str | None = None) -> str:
+    _file_name: str = file_name or os.path.join(output_dir, rand_str()) + ".pkl"
+    pickle.dump(
+        {rand_str(): [random.randint(0, 100) for _ in range(100)]},
+        open(_file_name, "wb"),
+    )
+    return _file_name
+
+
+def fake_nml(*_, **__) -> str:
     _file_name: str = os.path.join(DATA_DIR, "example.nml")
     return _file_name
 
@@ -60,9 +98,23 @@ def to_nml(dictionary: typing.Dict[str, typing.Any], file_name: str) -> None:
 
 
 @pytest.fixture
-def fake_log() -> typing.Tuple[str, typing.List[typing.Tuple[None, str]]]:
-    _rand_regex_1 = r"(\w+_\w+_\d+)=(\d+)"
-    _rand_regex_2 = r"(test_\w+)=(\'\w+\')"
+def fake_log(request) -> (
+    typing.Generator[
+        typing.Tuple[str, typing.List[typing.Tuple[None, str]]], None, None
+    ]
+):
+    _labels, _capture_groups = request.param
+
+    if _capture_groups == 2:
+        _rand_regex_1 = r"(\w+_\w+_\d+)=(\d+)"
+        _rand_regex_2 = r"(test_\w+)=(\'\w+\')"
+    elif _capture_groups == 3:
+        _rand_regex_1 = r"(\w+_)(\w+_\d+)=(\d+)"
+        _rand_regex_2 = r"(test_)(\w+)=(\'\w+\')"
+    else:
+        _rand_regex_1 = r"\w+_\w+_\d+=(\d+)"
+        _rand_regex_2 = r"test_\w+=(\'\w+\')"
+
     _regex_gen = xeger.Xeger(limit=10)
 
     def _write_dummy_data(file_name: str) -> None:
@@ -79,5 +131,9 @@ def fake_log() -> typing.Tuple[str, typing.List[typing.Tuple[None, str]]]:
             target=_write_dummy_data, args=(temp_f.name,)
         )
         _process.start()
-        yield temp_f.name, (_rand_regex_1, _rand_regex_2), (None, None)
+        yield {
+            "path_glob_exprs": temp_f.name,
+            "tracked_values": (_rand_regex_1, _rand_regex_2),
+            "labels": ("var_1", "var_2") if _labels else (None, None)
+        }
         _process.join()
