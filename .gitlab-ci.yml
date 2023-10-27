@@ -2,6 +2,7 @@ stages:
   - Install
   - Testing and Quality
   - SonarQube
+  - pages
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
@@ -44,12 +45,13 @@ Unit Tests:
   <<: *setup_unit
   script:
     - poetry config virtualenvs.in-project true
-    - poetry run pytest tests --cov=multiparser --cov-report=xml --cov-report=term
+    - poetry run pytest tests --cov=multiparser --cov-report=xml --cov-report=term --cov-report=html
   artifacts:
     untracked: false
     expire_in: "1 hr"
     paths:
       - "coverage*"
+      - "htmlcov"
 
 
 Security:
@@ -66,6 +68,27 @@ Security:
       - "bandit.json"
   except:
       - tags
+
+
+pylint:
+  stage: Testing and Quality
+  only:
+    - main
+  image: "python:3.10.12-slim-bullseye"
+  script:
+    - pip install pylint anybadge click
+    - pylint multiparser/ --exit-zero | tee code_quality_report.log
+    - anybadge -l "code quality" -v $(cat code_quality_report.log | tail -n 2 | cut -d ' ' -f 7 | cut -d '/' -f 1 | xargs) -f code_quality.svg
+  artifacts:
+    paths:
+      - code_quality_report.log
+      - code_quality.svg
+    when: always
+    expire_in: 1 hr
+  tags:
+    - ubuntu
+    - lower-privacy
+
 
 
 
@@ -87,3 +110,22 @@ sonarqube-check:
   allow_failure: true
   only:
     - main
+
+pages:
+  stage: pages
+  only:
+    - main
+  needs: ["pylint", "Unit Tests"]
+  script:
+    - mkdir -p public/files/media/
+    - mv htmlcov/* public/
+    - mv code_quality_report.log public/files/logs/
+    - mv code_quality.svg public/files/media/
+  artifacts:
+    when: always
+    expire_in: 1 hr
+    paths:
+      - public
+  tags:
+    - ubuntu
+    - lower-privacy
