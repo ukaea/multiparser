@@ -115,7 +115,7 @@ pages:
   stage: pages
   only:
     - main
-  needs: ["pylint", "Unit Tests"]
+  dependencies: ["pylint", "Unit Tests"]
   script:
     - mkdir -p public/files/media/
     - mv htmlcov/* public/
