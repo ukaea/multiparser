@@ -251,3 +251,5 @@ $RECYCLE.BIN/
 
 # Test data
 .vscode
+*.key
+*.plaintext

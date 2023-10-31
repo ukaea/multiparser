@@ -67,6 +67,7 @@ class FileMonitor:
         interval: float = 1e-3,
         log_level: int | str = logging.INFO,
         flatten_data: bool = False,
+        plain_logging: bool = False,
     ) -> None:
         """Create an instance of the file monitor for tracking file modifications.
 
@@ -91,6 +92,8 @@ class FileMonitor:
             log level for this object
         flatten_data : bool, optional
             whether to convert data to a single level dictionary of key-value pairs
+        plain_logging : bool, optional
+            turn off color/symbols in log outputs, default False
         """
         self._interval: float = interval
         self._timeout: int | None = timeout
@@ -111,11 +114,14 @@ class FileMonitor:
         self._log_monitor_thread: mp_thread.HandledThread | None = None
         self._flatten_data: bool = flatten_data
 
+        _plain_log: str = "{elapsed} | {level: <8} | multiparser | {message}"
+        _color_log: str = "{level.icon} | <green>{elapsed}</green> "
+        "| <level>{level: <8}</level> | <c>multiparse</c> | {message}"
+
         loguru.logger.add(
             sys.stderr,
-            format="{level.icon} | <green>{elapsed}</green> "
-            "| <level>{level: <8}</level> | <c>multiparse</c> | {message}",
-            colorize=True,
+            format=_plain_log if plain_logging else _color_log,
+            colorize=not plain_logging,
             level=log_level,
         )
 
