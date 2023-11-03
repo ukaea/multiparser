@@ -23,6 +23,7 @@ import string
 import sys
 import threading
 import typing
+from multiprocessing.synchronize import Event
 
 import loguru
 
@@ -62,6 +63,7 @@ class FileMonitor:
         exception_callback: typing.Callable | None = None,
         notification_callback: typing.Callable | None = None,
         termination_trigger: threading.Event | None = None,
+        subprocess_triggers: typing.List[Event] | None = None,
         timeout: int | None = None,
         lock_callbacks: bool = True,
         interval: float = 1e-3,
@@ -83,6 +85,10 @@ class FileMonitor:
         notification_callback : typing.Callable | None, optional
             function to be called when a new file is found, default is
             a print statement
+        subprocess_triggers : typing.List[Event], optional
+            if provided, events which will be set if monitor terminates
+        timeout : int, optional
+            time after which to terminate, default is None
         lock_callback : bool, optional
             whether to only allow one thread to execute the callbacks
             at a time. Default is True.
@@ -103,6 +109,7 @@ class FileMonitor:
         self._file_threads_mutex: "threading.Lock | None" = (
             threading.Lock() if lock_callbacks else None
         )
+        self._subprocess_triggers: typing.List[Event] | None = subprocess_triggers
         self._manual_abort: bool = termination_trigger is not None
         self._complete = termination_trigger or threading.Event()
         self._abort_file_monitors = termination_trigger or threading.Event()
@@ -115,8 +122,7 @@ class FileMonitor:
         self._flatten_data: bool = flatten_data
 
         _plain_log: str = "{elapsed} | {level: <8} | multiparser | {message}"
-        _color_log: str = "{level.icon} | <green>{elapsed}</green> "
-        "| <level>{level: <8}</level> | <c>multiparse</c> | {message}"
+        _color_log: str = "{level.icon} | <green>{elapsed}</green>  | <level>{level: <8}</level> | <c>multiparse</c> | {message}"
 
         loguru.logger.add(
             sys.stderr,
@@ -452,6 +458,10 @@ class FileMonitor:
 
         self._file_monitor_thread.join(self._timeout)
         self._log_monitor_thread.join(self._timeout)
+
+        if self._subprocess_triggers:
+            for trigger in self._subprocess_triggers:
+                trigger.set()
 
         if not self._known_files:
             loguru.logger.warning("No files were processed during this session.")
