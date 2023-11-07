@@ -164,7 +164,7 @@ from pandas import read_hdf
 
 monitor.track(
     "my_file.h5",
-    custom_parser=read_hdf,
+    parser_func=read_hdf,
     parser_args={"key": "my_key"}
 )
 ```

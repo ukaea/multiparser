@@ -180,7 +180,7 @@ class FileThreadLauncher:
         tracked_values: Trackable,
         callback: typing.Callable,
         static: bool = False,
-        custom_parser: typing.Callable | None = None,
+        parser_func: typing.Callable | None = None,
         parser_kwargs: typing.Dict | None = None,
         convert: bool = True,
         file_type: str | None = None,
@@ -196,7 +196,7 @@ class FileThreadLauncher:
             values to monitor within the given file
         static : bool, optional
             whether the file is written only once, by default False
-        custom_parser : typing.Callable | None, optional
+        parser_func : typing.Callable | None, optional
             use a user defined parser instead
         convert : bool, optional
             convert values from string to numeric where appropriate
@@ -211,7 +211,7 @@ class FileThreadLauncher:
             tracked_vals: Trackable = tracked_values,
             lock: typing.Any | None = self._lock,
             static_read: bool = static,
-            cstm_parser: typing.Callable | None = custom_parser,
+            cstm_parser: typing.Callable | None = parser_func,
             kwargs: typing.Dict | None = parser_kwargs,
             flatten_data: bool = flatten_data,
         ) -> None:
@@ -239,7 +239,7 @@ class FileThreadLauncher:
                 _parsed = self._parsing_callback(
                     file_name,
                     tracked_vals,
-                    custom_parser=cstm_parser,
+                    parser_func=cstm_parser,
                     convert=convert,
                     kwargs=kwargs,
                     file_type=file_type,

@@ -250,7 +250,7 @@ class FileMonitor:
         path_glob_exprs: typing.List[str] | str,
         tracked_values: TrackedValues | None = None,
         callback: typing.Callable | None = None,
-        custom_parser: typing.Callable | None = None,
+        parser_func: typing.Callable | None = None,
         parser_kwargs: typing.Dict | None = None,
         static: bool = False,
         file_type: str | None = None,
@@ -272,7 +272,7 @@ class FileMonitor:
             within the file, by default None
         callback : typing.Callable | None, optional
             override the global per file callback
-        custom_parser : typing.Callable | None, optional
+        parser_func : typing.Callable | None, optional
             provide a custom parsing function
         parser_kwargs : typing.Dict | None, optional
             arguments to include when running the specified custom parser
@@ -288,7 +288,7 @@ class FileMonitor:
                 "glob_expr": path_glob_exprs,
                 "tracked_values": tracked_values,
                 "static": static,
-                "custom_parser": custom_parser,
+                "parser_func": parser_func,
                 "parser_kwargs": parser_kwargs,
                 "file_type": file_type,
                 "callback": callback or self._per_thread_callback,
@@ -300,7 +300,7 @@ class FileMonitor:
                     "glob_expr": g,
                     "tracked_values": tracked_values,
                     "static": static,
-                    "custom_parser": custom_parser,
+                    "parser_func": parser_func,
                     "parser_kwargs": parser_kwargs,
                     "file_type": file_type,
                     "callback": callback or self._per_thread_callback,
@@ -320,7 +320,7 @@ class FileMonitor:
         tracked_values: TrackedValues | None = None,
         labels: str | typing.List[str | None] | None = None,
         callback: typing.Callable | None = None,
-        custom_parser: typing.Callable | None = None,
+        parser_func: typing.Callable | None = None,
         parser_kwargs: typing.Dict | None = None,
     ) -> None:
         """Tail a set of files.
@@ -364,21 +364,21 @@ class FileMonitor:
             None, it is assumed all matches have a label capture group.
         callback : typing.Callable | None, optional
             override the global per file callback
-        custom_parser : typing.Callable | None, optional
+        parser_func : typing.Callable | None, optional
             provide a custom parsing function
         parser_kwargs : typing.Dict | None, optional
             arguments to include when running the specified custom parser
         """
-        if custom_parser:
-            self._check_custom_log_parser(custom_parser)
+        if parser_func:
+            self._check_custom_log_parser(parser_func)
 
-        if custom_parser and tracked_values:
+        if parser_func and tracked_values:
             raise AssertionError(
                 "Cannot specify both tracked values and custom parser for monitor "
                 "method 'track'"
             )
 
-        if custom_parser and labels:
+        if parser_func and labels:
             raise AssertionError(
                 "Cannot specify both labels and custom parser for monitor "
                 "method 'track'"
@@ -406,7 +406,7 @@ class FileMonitor:
                 "Number of labels must match number of regular expressions in 'tail'."
             )
 
-        if not _tracked_values or custom_parser:
+        if not _tracked_values or parser_func:
             _reg_lab_expr_pairing: typing.List[
                 typing.Tuple[str | None, typing.Pattern | str]
             ] | None = None
@@ -421,7 +421,7 @@ class FileMonitor:
                 "glob_expr": path_glob_exprs,
                 "tracked_values": _reg_lab_expr_pairing,
                 "static": False,
-                "custom_parser": custom_parser,
+                "parser_func": parser_func,
                 "parser_kwargs": parser_kwargs,
                 "callback": callback or self._per_thread_callback,
             }
@@ -432,7 +432,7 @@ class FileMonitor:
                     "glob_expr": g,
                     "tracked_values": _reg_lab_expr_pairing,
                     "static": False,
-                    "custom_parser": custom_parser,
+                    "parser_func": parser_func,
                     "parser_kwargs": parser_kwargs,
                     "callback": callback or self._per_thread_callback,
                 }

@@ -39,3 +39,8 @@ FullFileTrackable = typing.Dict[
 Trackable = LogFileTrackable | FullFileTrackable
 
 TrackableList = typing.List[LogFileTrackable] | typing.List[FullFileTrackable]
+
+TimeStampedData = typing.Tuple[
+    typing.Dict[str, str | int | typing.List[str]],
+    typing.Dict[str, typing.Any] | typing.List[typing.Dict[str, typing.Any]],
+]

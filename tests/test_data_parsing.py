@@ -10,6 +10,8 @@ import pytest
 from conftest import fake_csv, fake_feather, fake_nml, fake_toml
 
 import multiparser.parsing as mp_parse
+import multiparser.parsing.file as mp_file_parse
+import multiparser.parsing.tail as mp_tail_parse
 
 DATA_LIBRARY: str = os.path.join(os.path.dirname(__file__), "data")
 
@@ -22,7 +24,7 @@ DATA_LIBRARY: str = os.path.join(os.path.dirname(__file__), "data")
 def test_parse_f90nml() -> None:
     with tempfile.TemporaryDirectory() as temp_d:
         _data_file = fake_nml(temp_d)
-        _meta, _data = mp_parse.record_fortran_nml(input_file=_data_file)
+        _meta, _data = mp_file_parse.record_fortran_nml(input_file=_data_file)
         _, _data2 = mp_parse.record_file(_data_file, None, None, None)
         assert "timestamp" in _meta
         assert list(sorted(_data.items())) == sorted(_data2.items())
@@ -32,7 +34,7 @@ def test_parse_f90nml() -> None:
 def test_parse_csv() -> None:
     with tempfile.TemporaryDirectory() as temp_d:
         _data_file = fake_csv(temp_d)
-        _meta, _data = mp_parse.record_csv(input_file=_data_file)
+        _meta, _data = mp_file_parse.record_csv(input_file=_data_file)
         _, _data2 = mp_parse.record_file(_data_file, None, None, None)
         assert "timestamp" in _meta
         assert sorted([i.items() for i in _data]) == sorted([i.items() for i in _data2])
@@ -46,7 +48,7 @@ def test_parse_csv() -> None:
 def test_parse_feather() -> None:
     with tempfile.TemporaryDirectory() as temp_d:
         _data_file = fake_feather(temp_d)
-        _meta, _ = mp_parse.record_feather(input_file=_data_file)
+        _meta, _ = mp_file_parse.record_feather(input_file=_data_file)
         assert "timestamp" in _meta
 
 
@@ -54,7 +56,7 @@ def test_parse_feather() -> None:
 def test_parse_toml() -> None:
     with tempfile.TemporaryDirectory() as temp_d:
         _data_file = fake_toml(temp_d)
-        _meta, _data = mp_parse.record_toml(input_file=_data_file)
+        _meta, _data = mp_file_parse.record_toml(input_file=_data_file)
         _, _data2 = mp_parse.record_file(_data_file, None, None, None)
         assert "timestamp" in _meta
         assert list(sorted(_data.items())) == sorted(_data2.items())
@@ -76,12 +78,12 @@ def test_file_block_read() -> None:
         with open(temp_f.name, "w") as out_f:
             for _ in range(8):
                 out_f.write(f"{string.ascii_uppercase}\n")
-        _bytes, _lines = mp_parse.tail_file_n_bytes(temp_f.name, None)
+        _bytes, _lines = mp_tail_parse.tail_file_n_bytes(temp_f.name, None)
         assert _lines[-1] == f"{string.ascii_uppercase}\n"
         with open(temp_f.name, "a") as out_f:
             for _ in range(10):
                 out_f.write(f"{string.ascii_lowercase}\n")
-        _bytes, _lines = mp_parse.tail_file_n_bytes(temp_f.name, _bytes)
+        _bytes, _lines = mp_tail_parse.tail_file_n_bytes(temp_f.name, _bytes)
         assert f"{string.ascii_uppercase}\n" not in _lines
         assert _lines[-1] == f"{string.ascii_lowercase}\n"
 

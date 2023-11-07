@@ -149,7 +149,7 @@ def test_custom_data(stage: int, contains: typing.Tuple[str, ...]) -> None:
     _file: str = os.path.join(DATA_LIBRARY, f"custom_output_stage_{stage}.dat")
 
     @mp_parse.file_parser
-    def _custom_parser(
+    def _parser_func(
         input_file: str
     ) -> typing.Tuple[typing.Dict[str, typing.Any], typing.Dict[str, typing.Any]]:
         _get_matrix = r"^[(\d+.\d+) *]{16}$"
@@ -200,7 +200,7 @@ def test_custom_data(stage: int, contains: typing.Tuple[str, ...]) -> None:
     ) as monitor:
         monitor.track(
             _file,
-            custom_parser=_custom_parser,
+            parser_func=_parser_func,
             tracked_values=list(_expected.keys()),
             static=True,
         )
@@ -249,7 +249,7 @@ def test_parse_log_in_blocks() -> None:
         counter.value += 1
 
     @mp_parse.log_parser
-    def custom_parser(file_data: str, **_) -> typing.Tuple[typing.Dict[str, typing.Any], ...]:
+    def parser_func(file_data: str, **_) -> typing.Tuple[typing.Dict[str, typing.Any], ...]:
         _regex_search_str = r"\s*Data Out\n\s*Result:\ (\d+\.\d+)\n\s*Metric:\ (\d+\.\d+)\n\s*Normalised:\ (\d+\.\d+)\n\s*Accuracy:\ (\d+\.\d+)\n\s*Deviation:\ (\d+\.\d+)"
 
         _parser = re.compile(_regex_search_str, re.MULTILINE)
@@ -273,7 +273,7 @@ def test_parse_log_in_blocks() -> None:
         ) as monitor:
             monitor.tail(
                 [temp_f.name],
-                custom_parser=custom_parser
+                parser_func=parser_func
             )
             _process.start()
             monitor.run()
@@ -283,7 +283,7 @@ def test_parse_log_in_blocks() -> None:
 def test_parse_h5() -> None:
     _data_file: str = os.path.join(DATA_LIBRARY, "example.h5")
 
-    def custom_parser(file_name: str):
+    def parser_func(file_name: str):
         return pandas.read_hdf(file_name, key={"key": "my_group/my_dataset"}).to_dict()
 
     with multiparser.FileMonitor(
@@ -292,7 +292,7 @@ def test_parse_h5() -> None:
     ) as monitor:
         monitor.track(
             _data_file,
-            custom_parser=custom_parser,
+            parser_func=parser_func,
             static=True
         )
         monitor.run()
