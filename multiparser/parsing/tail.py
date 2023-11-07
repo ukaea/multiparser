@@ -137,6 +137,7 @@ def record_delimited(
     return {"headers": headers}, [_out_filtered]
 
 
+@log_parser
 def record_csv(
     file_content: str,
     headers: typing.List[str] | None = None,

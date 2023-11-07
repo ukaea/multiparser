@@ -224,7 +224,7 @@ class FileMonitor:
             )
         if not parser.__name__.endswith("__mp_parser"):
             raise AssertionError(
-                "Parser function must be decorated using the multiparser.parser decorator"
+                "Parser function must be decorated using the multiparser.log_parser decorator"
             )
 
     def exclude(self, path_glob_exprs: typing.List[str] | str) -> None:
