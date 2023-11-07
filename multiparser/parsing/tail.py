@@ -77,8 +77,7 @@ def _converter(value: str) -> typing.Any:
     return value
 
 
-@log_parser
-def record_delimited(
+def _record_any_delimited(
     file_content: str,
     delimiter: str,
     headers: typing.List[str] | None = None,
@@ -86,7 +85,7 @@ def record_delimited(
     convert: bool = True,
     **_,
 ) -> TimeStampedData:
-    """Process a single line of a delimited file extracting the tracked values.
+    """General internal function for any delimited file line.
 
     Parameters
     ----------
@@ -138,6 +137,46 @@ def record_delimited(
 
 
 @log_parser
+def record_with_delimiter(
+    file_content: str,
+    delimiter: str,
+    headers: typing.List[str] | None = None,
+    tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
+    convert: bool = True,
+    **kwargs,
+) -> TimeStampedData:
+    """Process a single line of a delimited file extracting the tracked values.
+
+    Parameters
+    ----------
+    file_content : str
+        the contents of the file line
+    delimiter : str
+        the delimiter separating values within the file line
+    header : typing.List[str]
+        the file headers representing the keys for the values
+    tracked_values : typing.List[typing.Tuple[str  |  None, typing.Pattern]] | None, optional
+        regular expressions defining which values to track within the log file, by default None
+    convert : bool, optional
+        whether to convert values from string to integer etc, by default True
+
+    Returns
+    -------
+    TimeStampedData
+        * metadata outlining properties such as modified time etc.
+        * actual recorded data from the file.
+    """
+    return _record_any_delimited(
+        file_content=file_content,
+        delimiter=delimiter,
+        headers=headers,
+        tracked_values=tracked_values,
+        convert=convert,
+        **kwargs,
+    )
+
+
+@log_parser
 def record_csv(
     file_content: str,
     headers: typing.List[str] | None = None,
@@ -166,7 +205,7 @@ def record_csv(
         * metadata outlining properties such as modified time etc.
         * actual recorded data from the file.
     """
-    return record_delimited(
+    return _record_any_delimited(
         file_content=file_content,
         delimiter=",",
         headers=headers,
