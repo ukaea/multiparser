@@ -81,7 +81,7 @@ def _converter(value: str) -> typing.Any:
 def record_delimited(
     file_content: str,
     delimiter: str,
-    headers: typing.List[str],
+    headers: typing.List[str] | None = None,
     tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
     convert: bool = True,
     **_,
@@ -107,10 +107,13 @@ def record_delimited(
         * metadata outlining properties such as modified time etc.
         * actual recorded data from the file.
     """
-    _line = (i.strip() for i in file_content.split(delimiter))
+    _line = [i.strip() for i in file_content.split(delimiter)]
+
+    if not headers:
+        return {"headers": _line}, []
 
     if convert:
-        _line = (_converter(i) for i in _line)
+        _line = [_converter(i) for i in _line]
 
     _out: typing.Dict[str, typing.Any] = dict(zip(headers, _line))
 
@@ -136,7 +139,7 @@ def record_delimited(
 
 def record_csv(
     file_content: str,
-    headers: typing.List[str],
+    headers: typing.List[str] | None = None,
     tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
     convert: bool = True,
     **kwargs,
