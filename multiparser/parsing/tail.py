@@ -106,15 +106,20 @@ def _record_any_delimited(
         * metadata outlining properties such as modified time etc.
         * actual recorded data from the file.
     """
+    # In case where user has provided headers but they are also in
+    # the file itself auto-skip this line
+    if headers and delimiter.join(headers) in file_content:
+        return {"headers": headers}, {}
+
     _line = [
         _stripped for i in file_content.split(delimiter) if (_stripped := i.strip())
     ]
 
     if not _line:
-        return {}, []
+        return {}, {}
 
     if not headers:
-        return {"headers": _line}, []
+        return {"headers": _line}, {}
 
     if convert:
         _line = [_converter(i) for i in _line]
@@ -122,7 +127,7 @@ def _record_any_delimited(
     _out: typing.Dict[str, typing.Any] = dict(zip(headers, _line))
 
     if not tracked_values:
-        return {"headers": headers}, [_out]
+        return {"headers": headers}, _out
 
     _out_filtered: typing.Dict[str, typing.Any] = {}
 
@@ -138,7 +143,7 @@ def _record_any_delimited(
             ):
                 _out_filtered[label] = value
 
-    return {"headers": headers}, [_out_filtered]
+    return {"headers": headers}, _out_filtered
 
 
 @log_parser
@@ -158,7 +163,7 @@ def record_with_delimiter(
         the contents of the file line
     delimiter : str
         the delimiter separating values within the file line
-    header : typing.List[str]
+    headers : typing.List[str]
         the file headers representing the keys for the values
     tracked_values : typing.List[typing.Tuple[str  |  None, typing.Pattern]] | None, optional
         regular expressions defining which values to track within the log file, by default None
@@ -345,6 +350,8 @@ def record_log(
     ----------
     input_file : str
         the path of the file to be parsed
+    skip_n_lines : int, optional
+        skip the first 'n' lines before parsing. Default 0.
     tracked_values : typing.List[typing.Tuple[str  |  None, typing.Pattern]] | None, optional
         regular expressions defining the values to be monitored, by default None
     convert : bool, optional
@@ -366,7 +373,8 @@ def record_log(
                 "\n".join(_lines),
                 __input_file=input_file,
                 __read_bytes=_read_bytes,
-                **(parser_kwargs or {}),
+                convert=convert,
+                **parser_kwargs,
             )
         ]
     return [

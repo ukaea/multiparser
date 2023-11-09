@@ -21,7 +21,7 @@ import multiparser.exceptions as mp_exc
 import multiparser.thread as mp_thread
 import multiparser.parsing as mp_parse
 from tests.conftest import fake_feather, fake_json, fake_parquet, fake_pickle, fake_yaml
-from multiparser.parsing.tail import record_csv as tail_record_csv
+from multiparser.parsing.tail import record_with_delimiter as tail_record_delimited
 
 
 DATA_LIBRARY: str = os.path.join(os.path.dirname(__file__), "data")
@@ -282,15 +282,28 @@ def test_parse_log_in_blocks() -> None:
 
 
 @pytest.mark.parsing
-def test_parse_csv_in_blocks() -> None:
+@pytest.mark.parametrize(
+    "delimiter", (",", " "),
+    ids=("comma", "whitespace")
+)
+@pytest.mark.parametrize(
+    "explicit_headers", (None, [f"num_{i}" for i in range(5)]),
+    ids=("no_headers", "headers")
+)
+def test_parse_delimited_in_blocks(delimiter, explicit_headers) -> None:
     _refresh_interval: float = 0.1
-    _expected = [{f"var_{i}": random.random() * 10 for i in range(5)} for _ in range(10)]
-    _headers = ",".join(f"var_{i}" for i in range(5))
+
+    if explicit_headers:
+        _expected = [{k: random.random() * 10 for k in explicit_headers} for _ in range(10)]
+        _headers = delimiter.join(explicit_headers)
+    else:
+        _expected = [{f"var_{i}": random.random() * 10 for i in range(5)} for _ in range(10)]
+        _headers = delimiter.join(f"var_{i}" for i in range(5))
 
     _file_blocks = [_headers]
 
     _file_blocks += [
-        ",".join(map(str, row.values()))
+        delimiter.join(map(str, row.values()))
         for row in _expected
     ]
 
@@ -324,7 +337,8 @@ def test_parse_csv_in_blocks() -> None:
         ) as monitor:
             monitor.tail(
                 [temp_f.name],
-                parser_func=tail_record_csv
+                parser_func=tail_record_delimited,
+                parser_kwargs={"delimiter": delimiter, "headers": explicit_headers}
             )
             _process.start()
             monitor.run()

@@ -212,7 +212,7 @@ class FileThreadLauncher:
             lock: typing.Any | None = self._lock,
             static_read: bool = static,
             cstm_parser: typing.Callable | None = parser_func,
-            kwargs: typing.Dict | None = parser_kwargs,
+            kwargs: typing.Dict = parser_kwargs or {},
             flatten_data: bool = flatten_data,
         ) -> None:
             """Thread target function for parsing of detected file"""
@@ -241,9 +241,9 @@ class FileThreadLauncher:
                     tracked_vals,
                     parser_func=cstm_parser,
                     convert=convert,
-                    parser_kwargs=kwargs,
                     file_type=file_type,
                     **_cached_metadata,
+                    **kwargs,
                 )
 
                 # Some parsers return multiple results, e.g. those parsing multiple file lines
@@ -262,7 +262,9 @@ class FileThreadLauncher:
 
                 for _meta, _data in _flattened_list:
                     # Keep latest
-                    _cached_metadata = _meta
+                    _cached_metadata = {
+                        k: v for k, v in _meta.items() if k not in kwargs
+                    }
 
                     if not _data:
                         continue

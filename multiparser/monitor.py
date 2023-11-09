@@ -208,14 +208,18 @@ class FileMonitor:
             ),
         )
 
-    def _check_custom_log_parser(self, parser: typing.Callable) -> None:
+    def _check_custom_log_parser(
+        self, parser: typing.Callable, **parser_kwargs
+    ) -> None:
         """Verifies the parser works correctly before launching threads"""
         _test_str = string.ascii_lowercase
         _test_str += string.ascii_uppercase
         _test_str += string.ascii_letters
         _test_str *= 100
         try:
-            _out = parser(_test_str, __input_file=__file__, __read_bytes=None)
+            _out = parser(
+                _test_str, __input_file=__file__, __read_bytes=None, **parser_kwargs
+            )
         except Exception as e:
             raise AssertionError(f"Custom parser testing failed with exception:\n{e}")
         if len(_out) != 2:
@@ -370,7 +374,7 @@ class FileMonitor:
             arguments to include when running the specified custom parser
         """
         if parser_func:
-            self._check_custom_log_parser(parser_func)
+            self._check_custom_log_parser(parser_func, **(parser_kwargs or {}))
 
         if parser_func and tracked_values:
             raise AssertionError(
