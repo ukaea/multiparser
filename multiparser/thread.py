@@ -242,8 +242,7 @@ class FileThreadLauncher:
                     parser_func=cstm_parser,
                     convert=convert,
                     file_type=file_type,
-                    **_cached_metadata,
-                    **kwargs,
+                    **(_cached_metadata | {k: v for k, v in kwargs.items() if v}),
                 )
 
                 # Some parsers return multiple results, e.g. those parsing multiple file lines
@@ -262,9 +261,7 @@ class FileThreadLauncher:
 
                 for _meta, _data in _flattened_list:
                     # Keep latest
-                    _cached_metadata = {
-                        k: v for k, v in _meta.items() if k not in kwargs
-                    }
+                    _cached_metadata = _meta
 
                     if not _data:
                         continue

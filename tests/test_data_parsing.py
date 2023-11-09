@@ -139,7 +139,7 @@ def test_parse_log(fake_log, request) -> None:
 )
 @pytest.mark.parametrize(
     "header", (
-        ["1231.235", "3455.223", "45632.234", "34536.23"], None
+        [f"var_{i}" for i in range(5)], None
     ),
     ids=("header", "no_header")
 )
@@ -154,8 +154,13 @@ def test_parse_delimited(fake_delimited_log, request, header) -> None:
             input_file=_file,
             tracked_values=None,
             parser_func=record_with_delimiter,
-            parser_kwargs={"delimiter": expected_output[0][0], "headers": header}
+            delimiter=expected_output[0][0],
+            headers=header
         )
+
+        # Metadata still collected when no results found
+        if _entry[0] and not _entry[1]:
+            continue
 
         assert (_entry[1] if header else not _entry[1])
 
