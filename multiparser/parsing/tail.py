@@ -329,6 +329,7 @@ def record_log(
     convert: bool = True,
     read_bytes: int | None = None,
     parser_func: typing.Callable | None = None,
+    parser_func_kwargs: typing.Dict[str, typing.Any] | None = None,
     **_,
 ) -> typing.List[TimeStampedData]:
     """Record lines within a log type file.
@@ -354,10 +355,14 @@ def record_log(
         * actual recorded data from the file.
     """
     _read_bytes, _lines = tail_file_n_bytes(input_file, read_bytes)
+
     if parser_func:
         return [
             parser_func(
-                "\n".join(_lines), __input_file=input_file, __read_bytes=_read_bytes
+                "\n".join(_lines),
+                __input_file=input_file,
+                __read_bytes=_read_bytes,
+                **(parser_func_kwargs or {}),
             )
         ]
     return [

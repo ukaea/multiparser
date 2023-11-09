@@ -98,6 +98,34 @@ def to_nml(dictionary: typing.Dict[str, typing.Any], file_name: str) -> None:
 
 
 @pytest.fixture
+def fake_delimited_log(request) -> (
+    typing.Generator[
+        typing.Tuple[str, typing.List[typing.Tuple[None, str]]], None, None
+    ]
+):
+    _delimiter, _suffix = request.param
+
+    _regex_gen = xeger.Xeger(limit=10)
+
+    _gen_regex = r"\d+\.\d+"
+
+    def _write_dummy_data(file_name: str) -> None:
+        for _ in range(5):
+            time.sleep(0.1)
+            with open(file_name, "a") as out_f:
+                _out_line = _delimiter.join([_regex_gen.xeger(_gen_regex) for _ in range(5)])
+                out_f.writelines([_out_line])
+
+    with tempfile.NamedTemporaryFile(suffix=_suffix) as temp_f:
+        _process = multiprocessing.Process(
+            target=_write_dummy_data, args=(temp_f.name,)
+        )
+        _process.start()
+        yield temp_f.name
+        _process.join()
+
+
+@pytest.fixture
 def fake_log(request) -> (
     typing.Generator[
         typing.Tuple[str, typing.List[typing.Tuple[None, str]]], None, None
