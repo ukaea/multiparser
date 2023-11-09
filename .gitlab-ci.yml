@@ -1,44 +1,19 @@
 stages:
-  - Install
   - Testing and Quality
   - SonarQube
   - pages
 
-variables:
-  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
 
-cache:
-  paths:
-    - .cache/pip
-
-Build Virtual Environment:
-  stage: Install
-  image: "python:3.10.12-slim-bullseye"
-  tags:
-    - ubuntu
-    - lower-privacy
-  script:
-    - pip install --upgrade pip
-    - pip install poetry
-    - poetry config virtualenvs.in-project true
-    - poetry install --all-extras
-  artifacts:
-    untracked: false
-    when: on_success
-    expire_in: "1 hr"
-    paths:
-      - .venv
+cache: {}
 
 .setup_template_unit: &setup_unit
   image: "python:3.10"
-  needs:
-    - Build Virtual Environment
   tags:
     - ubuntu
     - lower-privacy
   before_script:
     - pip install poetry
-    - poetry config virtualenvs.in-project true
+    - poetry install
 
 Unit Tests:
   stage: Testing and Quality
