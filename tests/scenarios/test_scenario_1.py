@@ -40,7 +40,6 @@ def run_dummy_analysis(
 def per_file_callback(
     data: typing.Dict[str, typing.Any], meta_data: typing.Dict[str, typing.Any]
 ):
-    # print(meta_data)
     print(f"Read input from file '{meta_data['file_name']}': {data}")
 
 

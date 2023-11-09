@@ -21,6 +21,7 @@ import multiparser.exceptions as mp_exc
 import multiparser.thread as mp_thread
 import multiparser.parsing as mp_parse
 from tests.conftest import fake_feather, fake_json, fake_parquet, fake_pickle, fake_yaml
+from multiparser.parsing.tail import record_csv as tail_record_csv
 
 
 DATA_LIBRARY: str = os.path.join(os.path.dirname(__file__), "data")
@@ -278,6 +279,57 @@ def test_parse_log_in_blocks() -> None:
             _process.start()
             monitor.run()
             _process.join()
+
+
+@pytest.mark.parsing
+def test_parse_csv_in_blocks() -> None:
+    _refresh_interval: float = 0.1
+    _expected = [{f"var_{i}": random.random() * 10 for i in range(5)} for _ in range(10)]
+    _headers = ",".join(f"var_{i}" for i in range(5))
+
+    _file_blocks = [_headers]
+
+    _file_blocks += [
+        ",".join(map(str, row.values()))
+        for row in _expected
+    ]
+
+    def run_simulation(out_file: str, trigger, file_content: typing.List[typing.List[str]]=_file_blocks, interval:float=_refresh_interval) -> None:
+        for block in file_content:
+            time.sleep(interval)
+            with open(out_file, "a") as out_f:
+                out_f.write(block)
+        trigger.set()
+
+    @dataclasses.dataclass
+    class Counter:
+        value: int = 0
+
+    _counter = Counter()
+
+    def callback_check(data, _, comparison=_expected, counter=_counter) -> None:
+        for key, value in data.items():
+            assert value == comparison[counter.value][key]
+        counter.value += 1
+
+    with tempfile.NamedTemporaryFile(suffix=".csv") as temp_f:
+        _termination_trigger = multiprocessing.Event()
+        _process = multiprocessing.Process(target=run_simulation, args=(temp_f.name,_termination_trigger))
+
+        with multiparser.FileMonitor(
+            per_thread_callback=callback_check,
+            termination_trigger=_termination_trigger,
+            interval=0.1*_refresh_interval,
+            log_level=logging.DEBUG
+        ) as monitor:
+            monitor.tail(
+                [temp_f.name],
+                parser_func=tail_record_csv
+            )
+            _process.start()
+            monitor.run()
+            _process.join()
+
 
 @pytest.mark.parsing
 def test_parse_h5() -> None:

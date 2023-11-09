@@ -375,13 +375,13 @@ class FileMonitor:
         if parser_func and tracked_values:
             raise AssertionError(
                 "Cannot specify both tracked values and custom parser for monitor "
-                "method 'track'"
+                "method 'tail'"
             )
 
         if parser_func and labels:
             raise AssertionError(
                 "Cannot specify both labels and custom parser for monitor "
-                "method 'track'"
+                "method 'tail'"
             )
 
         _tracked_values: typing.List[str | typing.Pattern]

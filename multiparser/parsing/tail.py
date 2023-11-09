@@ -106,7 +106,12 @@ def _record_any_delimited(
         * metadata outlining properties such as modified time etc.
         * actual recorded data from the file.
     """
-    _line = [i.strip() for i in file_content.split(delimiter)]
+    _line = [
+        _stripped for i in file_content.split(delimiter) if (_stripped := i.strip())
+    ]
+
+    if not _line:
+        return {}, []
 
     if not headers:
         return {"headers": _line}, []
@@ -329,8 +334,7 @@ def record_log(
     convert: bool = True,
     read_bytes: int | None = None,
     parser_func: typing.Callable | None = None,
-    parser_func_kwargs: typing.Dict[str, typing.Any] | None = None,
-    **_,
+    **parser_kwargs: typing.Dict[str, typing.Any],
 ) -> typing.List[TimeStampedData]:
     """Record lines within a log type file.
 
@@ -362,7 +366,7 @@ def record_log(
                 "\n".join(_lines),
                 __input_file=input_file,
                 __read_bytes=_read_bytes,
-                **(parser_func_kwargs or {}),
+                **(parser_kwargs or {}),
             )
         ]
     return [

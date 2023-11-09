@@ -154,7 +154,7 @@ def test_parse_delimited(fake_delimited_log, request, header) -> None:
             input_file=_file,
             tracked_values=None,
             parser_func=record_with_delimiter,
-            parser_func_kwargs={"delimiter": expected_output[0][0], "headers": header}
+            parser_kwargs={"delimiter": expected_output[0][0], "headers": header}
         )
 
         assert (_entry[1] if header else not _entry[1])
@@ -176,15 +176,13 @@ def test_parse_delimited(fake_delimited_log, request, header) -> None:
 def test_tail_csv(fake_delimited_log, header) -> None:
     _file = fake_delimited_log
 
-    print(_file)
-
     for _ in range(10):
         time.sleep(0.1)
         _entry, *_ = mp_parse.record_log(
             input_file=_file,
             tracked_values=None,
             parser_func=log_record_csv,
-            parser_func_kwargs={"headers": header}
+            parser_kwargs={"headers": header}
         )
 
         assert (_entry[1] if header else not _entry[1])

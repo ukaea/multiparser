@@ -241,7 +241,7 @@ class FileThreadLauncher:
                     tracked_vals,
                     parser_func=cstm_parser,
                     convert=convert,
-                    kwargs=kwargs,
+                    parser_kwargs=kwargs,
                     file_type=file_type,
                     **_cached_metadata,
                 )
@@ -254,7 +254,7 @@ class FileThreadLauncher:
                 # we need to ensure these are handled in the same way as for parsers
                 # which return only a single data dictionary
                 for _meta, _entry in _parsed_list:
-                    if isinstance(_entry, (list, tuple, set)):
+                    if isinstance(_entry, (list, tuple, set)) and _entry:
                         for section in _entry:
                             _flattened_list.append((_meta, section))
                     else:
