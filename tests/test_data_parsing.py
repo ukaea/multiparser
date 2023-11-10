@@ -148,21 +148,29 @@ def test_parse_delimited(fake_delimited_log, request, header) -> None:
 
     _, expected_output = request.node.get_closest_marker("parametrize").args
 
+    with open(_file) as in_f:
+        _all = in_f.readlines()
+        if not header:
+            _all = _all[1:]
+    _collected = []
+
     for _ in range(10):
         time.sleep(0.1)
-        _entry, *_ = mp_parse.record_log(
+        _meta, _data = mp_parse.record_log(
             input_file=_file,
             tracked_values=None,
             parser_func=record_with_delimiter,
             delimiter=expected_output[0][0],
             headers=header
         )
+        _collected += [i.values() for i in _data]
 
         # Metadata still collected when no results found
-        if _entry[0] and not _entry[1]:
+        if _meta and not _data:
             continue
 
-        assert (_entry[1] if header else not _entry[1])
+        assert (_data if header else not _data)
+    assert all(i in _collected for i in _all)
 
 
 @pytest.mark.parsing
@@ -181,13 +189,24 @@ def test_parse_delimited(fake_delimited_log, request, header) -> None:
 def test_tail_csv(fake_delimited_log, header) -> None:
     _file = fake_delimited_log
 
+    with open(_file) as in_f:
+        _all = in_f.readlines()
+        if not header:
+            _all = _all[1:]
+    _collected = []
+
     for _ in range(10):
         time.sleep(0.1)
-        _entry, *_ = mp_parse.record_log(
+        _meta, _data = mp_parse.record_log(
             input_file=_file,
             tracked_values=None,
             parser_func=log_record_csv,
             parser_kwargs={"headers": header}
         )
 
-        assert (_entry[1] if header else not _entry[1])
+        # Metadata still collected when no results found
+        if _meta and not _data:
+            continue
+
+        assert (_data if header else not _data)
+    assert all(i in _collected for i in _all)

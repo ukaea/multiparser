@@ -293,32 +293,33 @@ def test_parse_log_in_blocks() -> None:
 def test_parse_delimited_in_blocks(delimiter, explicit_headers) -> None:
     _refresh_interval: float = 0.1
 
+    # Cases where user provides the headers, or they are read as first line in file
     if explicit_headers:
-        _expected = [{k: random.random() * 10 for k in explicit_headers} for _ in range(10)]
-        _headers = delimiter.join(explicit_headers)
+        _expected = [{k: random.random() * 10 for k in explicit_headers} for _ in range(40)]
+        _file_blocks = []
     else:
-        _expected = [{f"var_{i}": random.random() * 10 for i in range(5)} for _ in range(10)]
-        _headers = delimiter.join(f"var_{i}" for i in range(5))
-
-    _file_blocks = [_headers]
+        _expected = [{f"var_{i}": random.random() * 10 for i in range(5)} for _ in range(40)]
+        _file_blocks = [delimiter.join(f"var_{i}" for i in range(5)) + "\n"]
 
     _file_blocks += [
-        delimiter.join(map(str, row.values()))
+        delimiter.join(map(str, row.values())) + "\n"
         for row in _expected
     ]
-
-    def run_simulation(out_file: str, trigger, file_content: typing.List[typing.List[str]]=_file_blocks, interval:float=_refresh_interval) -> None:
-        for block in file_content:
-            time.sleep(interval)
-            with open(out_file, "a") as out_f:
-                out_f.write(block)
-        trigger.set()
 
     @dataclasses.dataclass
     class Counter:
         value: int = 0
 
     _counter = Counter()
+
+    def run_simulation(out_file: str, trigger, file_content: typing.List[typing.List[str]]=_file_blocks, interval:float=_refresh_interval) -> None:
+        current_line = 0
+        while current_line + (n_lines := random.randint(1, 4)) < len(file_content):
+            time.sleep(interval)
+            with open(out_file, "a") as out_f:
+                out_f.writelines(file_content[current_line:current_line+n_lines])
+            current_line += n_lines
+        trigger.set()
 
     def callback_check(data, _, comparison=_expected, counter=_counter) -> None:
         for key, value in data.items():

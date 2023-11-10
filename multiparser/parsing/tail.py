@@ -109,7 +109,7 @@ def _record_any_delimited(
     # In case where user has provided headers but they are also in
     # the file itself auto-skip this line
     if headers and delimiter.join(headers) in file_content:
-        return {"headers": headers}, {}
+        return {}, []
 
     _line = [
         _stripped for i in file_content.split(delimiter) if (_stripped := i.strip())
@@ -119,7 +119,7 @@ def _record_any_delimited(
         return {}, {}
 
     if not headers:
-        return {"headers": _line}, {}
+        return {"headers": _line}, []
 
     if convert:
         _line = [_converter(i) for i in _line]
@@ -127,7 +127,7 @@ def _record_any_delimited(
     _out: typing.Dict[str, typing.Any] = dict(zip(headers, _line))
 
     if not tracked_values:
-        return {"headers": headers}, _out
+        return {}, [_out]
 
     _out_filtered: typing.Dict[str, typing.Any] = {}
 
@@ -143,7 +143,7 @@ def _record_any_delimited(
             ):
                 _out_filtered[label] = value
 
-    return {"headers": headers}, _out_filtered
+    return {}, [_out_filtered]
 
 
 @log_parser
@@ -176,14 +176,31 @@ def record_with_delimiter(
         * metadata outlining properties such as modified time etc.
         * actual recorded data from the file.
     """
-    return _record_any_delimited(
-        file_content=file_content,
-        delimiter=delimiter,
-        headers=headers,
-        tracked_values=tracked_values,
-        convert=convert,
-        **kwargs,
-    )
+    # The delimiter parser assumes each line is a new data entry so
+    # revert back to list of lines here
+    _file_lines: typing.List[str] = file_content.split("\n")
+
+    _time_stamped_data: TimeStampedData = {}, []
+
+    for file_line in _file_lines:
+        _parsed_data: TimeStampedData = _record_any_delimited(
+            file_content=file_line,
+            delimiter=delimiter,
+            headers=headers,
+            tracked_values=tracked_values,
+            convert=convert,
+            **kwargs,
+        )
+
+        # Make sure each line does not erase the previous metadata collected at the start
+        # of processing the block, e.g. if headers are set. May have further use in future
+        # if other info is extractable but not necessarily present in the first line
+        _time_stamped_data[0] = {  # type: ignore
+            k: v for k, v in _parsed_data[0].items() if not _time_stamped_data[0].get(k)
+        }
+        _time_stamped_data[1] += _parsed_data[1]  # type: ignore
+
+    return _time_stamped_data
 
 
 @log_parser
@@ -215,18 +232,35 @@ def record_csv(
         * metadata outlining properties such as modified time etc.
         * actual recorded data from the file.
     """
-    return _record_any_delimited(
-        file_content=file_content,
-        delimiter=",",
-        headers=headers,
-        tracked_values=tracked_values,
-        convert=convert,
-        **kwargs,
-    )
+    # The delimiter parser assumes each line is a new data entry so
+    # revert back to list of lines here
+    _file_lines: typing.List[str] = file_content.split("\n")
+
+    _time_stamped_data: TimeStampedData = {}, []
+
+    for file_line in _file_lines:
+        _parsed_data: TimeStampedData = _record_any_delimited(
+            file_content=file_line,
+            delimiter=",",
+            headers=headers,
+            tracked_values=tracked_values,
+            convert=convert,
+            **kwargs,
+        )
+
+        # Make sure each line does not erase the previous metadata collected at the start
+        # of processing the block, e.g. if headers are set. May have further use in future
+        # if other info is extractable but not necessarily present in the first line
+        _time_stamped_data[0] = {  # type: ignore
+            k: v for k, v in _parsed_data[0].items() if not _time_stamped_data[0].get(k)
+        }
+        _time_stamped_data[1] += _parsed_data[1]  # type: ignore
+
+    return _time_stamped_data
 
 
 @log_parser
-def _process_log_line(
+def _process_log_content(
     file_content: str,
     tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
     convert: bool = True,
@@ -368,17 +402,22 @@ def record_log(
     _read_bytes, _lines = tail_file_n_bytes(input_file, read_bytes)
 
     if parser_func:
-        return [
-            parser_func(
-                "\n".join(_lines),
-                __input_file=input_file,
-                __read_bytes=_read_bytes,
-                convert=convert,
-                **parser_kwargs,
-            )
-        ]
+        # In general parser functions are assumed to parse blocks of information
+        # so join lines into single string here
+        _parsed_content = parser_func(
+            "\n".join(_lines),
+            __input_file=input_file,
+            __read_bytes=_read_bytes,
+            convert=convert,
+            **parser_kwargs,
+        )
+        return (
+            list(_parsed_content)
+            if isinstance(_parsed_content, (list, tuple, set))
+            else [_parsed_content]
+        )
     return [
-        _process_log_line(
+        _process_log_content(
             __input_file=input_file,
             __read_bytes=_read_bytes,
             file_content=line,
