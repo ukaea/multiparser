@@ -330,6 +330,7 @@ class FileMonitor:
         self,
         path_glob_exprs: typing.List[str] | str,
         tracked_values: TrackedValues | None = None,
+        skip_lines_w_pattern: typing.List[typing.Pattern | str] | None = None,
         labels: str | typing.List[str | None] | None = None,
         callback: typing.Callable | None = None,
         parser_func: typing.Callable | None = None,
@@ -370,6 +371,8 @@ class FileMonitor:
             Where one capture group is defined the user must provide
             an associative label. Where two are defined, the first capture
             group is taken to be the label, the second the value.
+        skip_lines_w_pattern : typing.List[Pattern | str], optional
+            specify patterns defining lines which should be skipped
         labels : typing.List[str], optional
             define the label to assign to each value, if an element in the
             list is None, then a capture group is used. If labels itself is
@@ -436,6 +439,7 @@ class FileMonitor:
                 "parser_func": parser_func,
                 "parser_kwargs": parser_kwargs,
                 "callback": callback or self._per_thread_callback,
+                "ignore_lines": skip_lines_w_pattern,
             }
             self._log_trackables.append(_parsing_dict)
         else:
@@ -447,6 +451,7 @@ class FileMonitor:
                     "parser_func": parser_func,
                     "parser_kwargs": parser_kwargs,
                     "callback": callback or self._per_thread_callback,
+                    "ignore_lines": skip_lines_w_pattern,
                 }
                 for g in path_glob_exprs
             ]

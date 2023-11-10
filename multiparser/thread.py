@@ -183,6 +183,7 @@ class FileThreadLauncher:
         parser_func: typing.Callable | None = None,
         parser_kwargs: typing.Dict | None = None,
         convert: bool = True,
+        ignore_lines: typing.List[typing.Pattern | str] | None = None,
         file_type: str | None = None,
         **_,
     ) -> None:
@@ -212,6 +213,8 @@ class FileThreadLauncher:
             lock: typing.Any | None = self._lock,
             static_read: bool = static,
             cstm_parser: typing.Callable | None = parser_func,
+            convert: bool = convert,
+            ignore_lines: typing.List[str | typing.Pattern] | None = ignore_lines,
             kwargs: typing.Dict = parser_kwargs or {},
             flatten_data: bool = flatten_data,
         ) -> None:
@@ -241,6 +244,7 @@ class FileThreadLauncher:
                     tracked_vals,
                     parser_func=cstm_parser,
                     convert=convert,
+                    ignore_lines=ignore_lines,
                     file_type=file_type,
                     **(_cached_metadata | {k: v for k, v in kwargs.items() if v}),
                 )

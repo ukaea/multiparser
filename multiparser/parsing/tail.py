@@ -17,6 +17,7 @@ import datetime
 import functools
 import os.path
 import platform
+import re
 import typing
 
 __all__ = ["record_csv", "log_parser", "record_log"]
@@ -406,8 +407,9 @@ def record_log(
     input_file: str,
     tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
     convert: bool = True,
-    __read_bytes: int | None = None,
+    ignore_lines: typing.List[typing.Pattern] | None = None,
     parser_func: typing.Callable | None = None,
+    __read_bytes: int | None = None,
     **parser_kwargs: typing.Dict[str, typing.Any],
 ) -> typing.List[TimeStampedData]:
     """Record lines within a log type file.
@@ -425,8 +427,14 @@ def record_log(
         regular expressions defining the values to be monitored, by default None
     convert : bool, optional
         whether to convert parsed values to int, float etc, by default True
+    ignore_lines : typing.List[Pattern], optional
+        specify patterns defining lines which should be skipped
+    parser_func : typing.Callable, optional
+        specify an alternative tail parsing function
     __read_bytes : int | None, optional
         internally set if provided, the position in bytes from which to read the file, by default None
+    **parser_kwargs
+        arguments to pass to a custom tail parsing function if provided
 
     Returns
     -------
@@ -435,6 +443,27 @@ def record_log(
         * actual recorded data from the file.
     """
     __read_bytes, _lines = tail_file_n_bytes(input_file, __read_bytes)
+
+    # Check if there are patterns defined for lines that should be ignored
+    # if this is the case loop through all patterns for each line,
+    # the patterns can either be string literals or regex compiled patterns
+    if ignore_lines:
+        _passing_lines: typing.List[str] = []
+        for line in _lines:
+            if any(
+                [
+                    any(
+                        [
+                            isinstance(pattern, re.Pattern) and pattern.findall(line),
+                            isinstance(pattern, str) and pattern in line,
+                        ]
+                    )
+                    for pattern in ignore_lines
+                ]
+            ):
+                continue
+            _passing_lines.append(line)
+        _lines = _passing_lines
 
     if parser_func:
         # In general parser functions are assumed to parse blocks of information

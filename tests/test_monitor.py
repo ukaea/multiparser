@@ -216,12 +216,14 @@ def test_parse_log_in_blocks() -> None:
     _expected = [{f"var_{i}": random.random() * 10 for i in range(5)} for _ in range(10)]
     _xeger = xeger.Xeger()
     _file_blocks = []
+    _gen_ignore_pattern = r"<!--ignore-this-\w+-\d+-->"
     _gen_rgx = r"\w+: \d+\.\d+"
     _file_blocks += [
         [_xeger.xeger(_gen_rgx)+"\n"] +
         [_xeger.xeger(_gen_rgx)+ "\n"] +
         [_xeger.xeger(_gen_rgx)+"\n"] +
         [_xeger.xeger(_gen_rgx)+"\n"] +
+        [_xeger.xeger(_gen_ignore_pattern)+"\n"] +
         ["\tData Out\n"] +
         [f"\tResult: {i['var_0']}\n"] +
         [f"\tMetric: {i['var_1']}\n"] +
@@ -274,7 +276,8 @@ def test_parse_log_in_blocks() -> None:
         ) as monitor:
             monitor.tail(
                 [temp_f.name],
-                parser_func=parser_func
+                parser_func=parser_func,
+                skip_lines_w_pattern=[re.compile(_gen_ignore_pattern)]
             )
             _process.start()
             monitor.run()
@@ -292,6 +295,7 @@ def test_parse_log_in_blocks() -> None:
 )
 def test_parse_delimited_in_blocks(delimiter, explicit_headers) -> None:
     _refresh_interval: float = 0.1
+    _xeger = xeger.Xeger()
 
     # Cases where user provides the headers, or they are read as first line in file
     if explicit_headers:
@@ -300,6 +304,9 @@ def test_parse_delimited_in_blocks(delimiter, explicit_headers) -> None:
     else:
         _expected = [{f"var_{i}": random.random() * 10 for i in range(5)} for _ in range(40)]
         _file_blocks = [delimiter.join(f"var_{i}" for i in range(5)) + "\n"]
+
+    _gen_ignore_pattern = r"<!--ignore-this-\w+-\d+-->"
+    _file_blocks += [_xeger.xeger(_gen_ignore_pattern) + "\n"]
 
     _file_blocks += [
         delimiter.join(map(str, row.values())) + "\n"
@@ -339,7 +346,8 @@ def test_parse_delimited_in_blocks(delimiter, explicit_headers) -> None:
             monitor.tail(
                 [temp_f.name],
                 parser_func=tail_record_delimited,
-                parser_kwargs={"delimiter": delimiter, "headers": explicit_headers}
+                parser_kwargs={"delimiter": delimiter, "headers": explicit_headers},
+                skip_lines_w_pattern=[re.compile(_gen_ignore_pattern)]
             )
             _process.start()
             monitor.run()
