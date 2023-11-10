@@ -23,22 +23,22 @@ import typing
 try:
     import f90nml
 except ImportError:
-    f90nml = None
+    f90nml = None  # type: ignore
 
 try:
     import flatdict
 except ImportError:
-    flatdict = None
+    flatdict = None  # type: ignore
 
 try:
     import pyarrow
 except ImportError:
-    pyarrow = None
+    pyarrow = None  # type: ignore
 
 try:
     import pandas
 except ImportError:
-    pandas = None
+    pandas = None  # type: ignore
 
 import loguru
 import toml
@@ -127,7 +127,7 @@ def record_feather(input_file: str) -> TimeStampedData:
         raise ImportError("Module 'pyarrow' is required for feather file type")
     if not pandas:
         raise ImportError("Module 'pandas' is required for feather file type")
-    return {}, pandas.read_feather(input_file).to_dict()
+    return {}, pandas.read_feather(input_file).to_dict()  # type: ignore
 
 
 @file_parser
@@ -137,7 +137,7 @@ def record_parquet(input_file: str) -> TimeStampedData:
         raise ImportError("Module 'pyarrow' is required for parquet file type")
     if not pandas:
         raise ImportError("Module 'pandas' is required for feather file type")
-    return {}, pandas.read_parquet(input_file).to_dict()
+    return {}, pandas.read_parquet(input_file).to_dict()  # type: ignore
 
 
 @file_parser

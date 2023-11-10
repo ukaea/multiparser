@@ -198,9 +198,10 @@ def record_with_delimiter(
             **(_global_metadata | kwargs),
         )
 
-        if not isinstance(_parsed_line, dict):
+        if not isinstance(_parsed_line[1], dict):
             raise AssertionError(
-                "Expected parsed statement to return a dictionary of recorded data"
+                "Expected parsed statement to return a dictionary "
+                f"of recorded data but got {_parsed_line}"
             )
 
         # Make sure each line does not erase the previous metadata collected at the start
@@ -271,9 +272,10 @@ def record_csv(
             **(_global_metadata | kwargs),
         )
 
-        if not isinstance(_parsed_line, dict):
+        if not isinstance(_parsed_line[1], dict):
             raise AssertionError(
-                "Expected parsed statement to return a dictionary of recorded data"
+                "Expected parsed statement to return a dictionary "
+                f"of recorded data but got {_parsed_line}"
             )
 
         # Make sure each line does not erase the previous metadata collected at the start
