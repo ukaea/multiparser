@@ -290,23 +290,36 @@ def test_parse_log_in_blocks() -> None:
     ids=("comma", "whitespace")
 )
 @pytest.mark.parametrize(
-    "explicit_headers", (None, [f"num_{i}" for i in range(5)]),
-    ids=("no_headers", "headers")
+    "explicit_headers", ("no_headers", "headers", "headers_search")
 )
 def test_parse_delimited_in_blocks(delimiter, explicit_headers) -> None:
     _refresh_interval: float = 0.1
     _xeger = xeger.Xeger()
 
     # Cases where user provides the headers, or they are read as first line in file
-    if explicit_headers:
-        _expected = [{k: random.random() * 10 for k in explicit_headers} for _ in range(40)]
+    if explicit_headers == "headers":
+        _headers = [f"num_{i}" for i in range(5)]
+        _header_search = None
+        _expected = [{k: random.random() * 10 for k in _headers} for _ in range(40)]
         _file_blocks = []
+    elif explicit_headers == "headers_search":
+        _headers = None
+        _header_search = re.compile(r"var_", re.IGNORECASE)
+        _expected = [{f"var_{i}": random.random() * 10 for i in range(5)} for _ in range(40)]
+        _file_blocks = [
+            _xeger.xeger("\w+\s\w+") + "\n" for _ in range(2) 
+        ]
     else:
+        _headers = None
+        _header_search = None
         _expected = [{f"var_{i}": random.random() * 10 for i in range(5)} for _ in range(40)]
         _file_blocks = [delimiter.join(f"var_{i}" for i in range(5)) + "\n"]
 
     _gen_ignore_pattern = r"<!--ignore-this-\w+-\d+-->"
     _file_blocks += [_xeger.xeger(_gen_ignore_pattern) + "\n"]
+
+    if explicit_headers == "headers_search":
+        _file_blocks += [delimiter.join(f"var_{i}" for i in range(5)) + "\n"]
 
     _file_blocks += [
         delimiter.join(map(str, row.values())) + "\n"
@@ -321,7 +334,7 @@ def test_parse_delimited_in_blocks(delimiter, explicit_headers) -> None:
 
     def run_simulation(out_file: str, trigger, file_content: typing.List[typing.List[str]]=_file_blocks, interval:float=_refresh_interval) -> None:
         current_line = 0
-        while current_line + (n_lines := random.randint(1, 4)) < len(file_content):
+        while current_line + (n_lines := random.randint(4, 6)) < len(file_content):
             time.sleep(interval)
             with open(out_file, "a") as out_f:
                 out_f.writelines(file_content[current_line:current_line+n_lines])
@@ -346,7 +359,7 @@ def test_parse_delimited_in_blocks(delimiter, explicit_headers) -> None:
             monitor.tail(
                 [temp_f.name],
                 parser_func=tail_record_delimited,
-                parser_kwargs={"delimiter": delimiter, "headers": explicit_headers},
+                parser_kwargs={"delimiter": delimiter, "headers": _headers, "header_pattern": _header_search},
                 skip_lines_w_pattern=[re.compile(_gen_ignore_pattern)]
             )
             _process.start()

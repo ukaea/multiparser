@@ -212,6 +212,9 @@ class FileMonitor:
         self, parser: typing.Callable, **parser_kwargs
     ) -> None:
         """Verifies the parser works correctly before launching threads"""
+        if hasattr(parser, "__skip_validation"):
+            return
+
         _test_str = string.ascii_lowercase
         _test_str += string.ascii_uppercase
         _test_str += string.ascii_letters
@@ -227,6 +230,7 @@ class FileMonitor:
 
         except Exception as e:
             raise AssertionError(f"Custom parser testing failed with exception:\n{e}")
+
         if len(_out) != 2:
             raise AssertionError(
                 "Parser function must return two objects, a metadata dictionary and parsed values"

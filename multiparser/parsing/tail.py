@@ -81,6 +81,7 @@ def _record_any_delimited(
     file_content: str,
     delimiter: str,
     headers: typing.List[str] | None = None,
+    header_pattern: str | re.Pattern | None = None,
     tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
     convert: bool = True,
     **_,
@@ -95,6 +96,9 @@ def _record_any_delimited(
         the delimiter separating values within the file line
     header : typing.List[str]
         the file headers representing the keys for the values
+    header_pattern : str | Pattern, optional
+        if specified, a string or pattern which identifies which line is to be used
+        for headers
     tracked_values : typing.List[typing.Tuple[str  |  None, typing.Pattern]] | None, optional
         regular expressions defining which values to track within the log file, by default None
     convert : bool, optional
@@ -118,13 +122,25 @@ def _record_any_delimited(
     if not _line:
         return {}, {}
 
-    if not headers:
+    if not headers and any(
+        [
+            isinstance(header_pattern, re.Pattern)
+            and header_pattern.findall(file_content),
+            isinstance(header_pattern, str) and header_pattern in file_content,
+            not header_pattern,
+        ]
+    ):
         return {"headers": _line}, {}
+
+    # If a patter has been specified for headers, but none have been identified yet
+    # then return as we only want data that follows a header line
+    if not headers and header_pattern:
+        return {}, {}
 
     if convert:
         _line = [_converter(i) for i in _line]
 
-    _out: typing.Dict[str, typing.Any] = dict(zip(headers, _line))
+    _out: typing.Dict[str, typing.Any] = dict(zip(headers, _line))  # type: ignore
 
     if not tracked_values:
         return {}, _out
@@ -218,6 +234,11 @@ def record_with_delimiter(
     for _parse_entry in _parsed_lines_output:
         _parsed_data.append((_global_metadata, _parse_entry))
 
+    # Headers must be read when the file is first created else any values after read
+    # will not align with these headings
+    if not _global_metadata.get("headers"):
+        raise AssertionError("Failed to retrieve file header during initial read")
+
     return _parsed_data
 
 
@@ -291,6 +312,11 @@ def record_csv(
 
     for _parse_entry in _parsed_lines_output:
         _parsed_data.append((_global_metadata, _parse_entry))
+
+    # Headers must be read when the file is first created else any values after read
+    # will not align with these headings
+    if not _global_metadata.get("headers"):
+        raise AssertionError("Failed to retrieve file header during initial read")
 
     return _parsed_data
 
@@ -489,3 +515,9 @@ def record_log(
         )
         for line in _lines
     ]
+
+
+# Built in parsers do not need to be validated by the File Monitor
+record_csv.__skip_validation = True  # type: ignore
+record_log.__skip_validation = True  # type: ignore
+record_with_delimiter.__skip_validation = True  # type: ignore
