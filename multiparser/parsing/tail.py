@@ -180,7 +180,9 @@ def record_with_delimiter(
     # revert back to list of lines here
     _file_lines: typing.List[str] = file_content.split("\n")
 
-    _time_stamped_data: TimeStampedData = {}, []
+    _metadata: typing.Dict[str, str | int | typing.List[str]]
+    _out_data: typing.Dict[str, typing.Any] | typing.List[typing.Dict[str, typing.Any]]
+    _metadata, _out_data = {}, []
 
     for file_line in _file_lines:
         _parsed_data: TimeStampedData = _record_any_delimited(
@@ -195,12 +197,12 @@ def record_with_delimiter(
         # Make sure each line does not erase the previous metadata collected at the start
         # of processing the block, e.g. if headers are set. May have further use in future
         # if other info is extractable but not necessarily present in the first line
-        _time_stamped_data[0] = {  # type: ignore
-            k: v for k, v in _parsed_data[0].items() if not _time_stamped_data[0].get(k)
-        }
-        _time_stamped_data[1] += _parsed_data[1]  # type: ignore
+        _metadata = {k: v for k, v in _parsed_data[0].items() if not _metadata.get(k)}
+        _out_data += (
+            _parsed_data[1] if isinstance(_parsed_data[1], list) else [_parsed_data[1]]
+        )
 
-    return _time_stamped_data
+    return _metadata, _out_data
 
 
 @log_parser
@@ -236,7 +238,9 @@ def record_csv(
     # revert back to list of lines here
     _file_lines: typing.List[str] = file_content.split("\n")
 
-    _time_stamped_data: TimeStampedData = {}, []
+    _metadata: typing.Dict[str, str | int | typing.List[str]]
+    _out_data: typing.Dict[str, typing.Any] | typing.List[typing.Dict[str, typing.Any]]
+    _metadata, _out_data = {}, []
 
     for file_line in _file_lines:
         _parsed_data: TimeStampedData = _record_any_delimited(
@@ -251,12 +255,12 @@ def record_csv(
         # Make sure each line does not erase the previous metadata collected at the start
         # of processing the block, e.g. if headers are set. May have further use in future
         # if other info is extractable but not necessarily present in the first line
-        _time_stamped_data[0] = {  # type: ignore
-            k: v for k, v in _parsed_data[0].items() if not _time_stamped_data[0].get(k)
-        }
-        _time_stamped_data[1] += _parsed_data[1]  # type: ignore
+        _metadata = {k: v for k, v in _parsed_data[0].items() if not _metadata.get(k)}
+        _out_data += (
+            _parsed_data[1] if isinstance(_parsed_data[1], list) else [_parsed_data[1]]
+        )
 
-    return _time_stamped_data
+    return _metadata, _out_data
 
 
 @log_parser
