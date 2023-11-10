@@ -115,9 +115,18 @@ def _record_any_delimited(
     if headers and delimiter.join(headers) in file_content:
         return {}, {}
 
-    _line = [
-        _stripped for i in file_content.split(delimiter) if (_stripped := i.strip())
-    ]
+    _line = []
+
+    # CSV files etc often use quotes for strings, where this is the case
+    # we can remove these, else assume quote is part of header/info
+    for component in file_content.split(delimiter):
+        _component = component.strip()
+        for quote_symbol in ("'", '"'):
+            if _component.startswith(quote_symbol) and _component.endswith(
+                quote_symbol
+            ):
+                _component = _component[1:-1]
+        _line.append(_component)
 
     if not _line:
         return {}, {}
