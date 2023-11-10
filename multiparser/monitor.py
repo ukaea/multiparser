@@ -220,13 +220,21 @@ class FileMonitor:
             _out = parser(
                 _test_str, __input_file=__file__, __read_bytes=None, **parser_kwargs
             )
+
+            # If the custom parser returns a list of entries, not just one
+            if isinstance(_out, list):
+                _out = _out[0]
+
         except Exception as e:
             raise AssertionError(f"Custom parser testing failed with exception:\n{e}")
         if len(_out) != 2:
             raise AssertionError(
                 "Parser function must return two objects, a metadata dictionary and parsed values"
             )
-        if not parser.__name__.endswith("__mp_parser"):
+
+        # Either the parser itself is decorated, or a function it calls to create the parsed data
+        # is decorated, either should add timestamp information
+        if not parser.__name__.endswith("__mp_parser") and "timestamp" not in _out[0]:
             raise AssertionError(
                 "Parser function must be decorated using the multiparser.log_parser decorator"
             )

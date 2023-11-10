@@ -269,7 +269,9 @@ class FileThreadLauncher:
                     if flatten_data:
                         _data = mp_parse.flatten_data(_data)
 
-                    loguru.logger.debug(f"{file_name}: Recorded: {_data}")
+                    loguru.logger.debug(
+                        f"{file_name}: {_modified_time}: Recorded: {_data}"
+                    )
 
                     if lock:
                         with lock:

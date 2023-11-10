@@ -13,7 +13,7 @@ cache: {}
     - lower-privacy
   before_script:
     - pip install poetry
-    - poetry install
+    - poetry install --all-extras
 
 Unit Tests:
   stage: Testing and Quality
@@ -63,9 +63,6 @@ pylint:
   tags:
     - ubuntu
     - lower-privacy
-
-
-
 
 sonarqube-check:
   stage: SonarQube

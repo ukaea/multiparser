@@ -55,10 +55,8 @@ def log_parser(parser: typing.Callable) -> typing.Callable:
             ).strftime("%Y-%m-%d %H:%M:%S.%f"),
             "hostname": platform.node(),
             "file_name": _input_file,
-            "read_bytes": kwargs["__read_bytes"],
+            "__read_bytes": kwargs["__read_bytes"],
         }
-        del kwargs["__input_file"]
-        del kwargs["__read_bytes"]
         _meta, _data = parser(file_content, *args, **kwargs)
         return _meta | _meta_data, _data
 
@@ -77,6 +75,7 @@ def _converter(value: str) -> typing.Any:
     return value
 
 
+@log_parser
 def _record_any_delimited(
     file_content: str,
     delimiter: str,
@@ -109,7 +108,7 @@ def _record_any_delimited(
     # In case where user has provided headers but they are also in
     # the file itself auto-skip this line
     if headers and delimiter.join(headers) in file_content:
-        return {}, []
+        return {}, {}
 
     _line = [
         _stripped for i in file_content.split(delimiter) if (_stripped := i.strip())
@@ -119,7 +118,7 @@ def _record_any_delimited(
         return {}, {}
 
     if not headers:
-        return {"headers": _line}, []
+        return {"headers": _line}, {}
 
     if convert:
         _line = [_converter(i) for i in _line]
@@ -127,7 +126,7 @@ def _record_any_delimited(
     _out: typing.Dict[str, typing.Any] = dict(zip(headers, _line))
 
     if not tracked_values:
-        return {}, [_out]
+        return {}, _out
 
     _out_filtered: typing.Dict[str, typing.Any] = {}
 
@@ -143,10 +142,9 @@ def _record_any_delimited(
             ):
                 _out_filtered[label] = value
 
-    return {}, [_out_filtered]
+    return {}, _out_filtered
 
 
-@log_parser
 def record_with_delimiter(
     file_content: str,
     delimiter: str,
@@ -154,7 +152,7 @@ def record_with_delimiter(
     tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
     convert: bool = True,
     **kwargs,
-) -> TimeStampedData:
+) -> typing.List[TimeStampedData]:
     """Process a single line of a delimited file extracting the tracked values.
 
     Parameters
@@ -178,41 +176,56 @@ def record_with_delimiter(
     """
     # The delimiter parser assumes each line is a new data entry so
     # revert back to list of lines here
-    _file_lines: typing.List[str] = file_content.split("\n")
+    _file_lines: typing.List[str] = [i for i in file_content.split("\n") if i]
 
-    _metadata: typing.Dict[str, str | int | typing.List[str]]
-    _out_data: typing.Dict[str, typing.Any] | typing.List[typing.Dict[str, typing.Any]]
-    _metadata, _out_data = {}, []
+    _parsed_data: typing.List[TimeStampedData] = []
+    _global_metadata: typing.Dict[str, str | int | typing.List[str]] = {}
+
+    if headers:
+        _global_metadata["headers"] = headers
+
+    _parsed_lines_output: typing.List[typing.Dict[str, typing.Any]] = []
+
+    if not _file_lines:
+        return []
 
     for file_line in _file_lines:
-        _parsed_data: TimeStampedData = _record_any_delimited(
+        _parsed_line: TimeStampedData = _record_any_delimited(
             file_content=file_line,
             delimiter=delimiter,
-            headers=headers,
             tracked_values=tracked_values,
             convert=convert,
-            **kwargs,
+            **(_global_metadata | kwargs),
         )
+
+        if not isinstance(_parsed_line, dict):
+            raise AssertionError(
+                "Expected parsed statement to return a dictionary of recorded data"
+            )
 
         # Make sure each line does not erase the previous metadata collected at the start
         # of processing the block, e.g. if headers are set. May have further use in future
         # if other info is extractable but not necessarily present in the first line
-        _metadata = {k: v for k, v in _parsed_data[0].items() if not _metadata.get(k)}
-        _out_data += (
-            _parsed_data[1] if isinstance(_parsed_data[1], list) else [_parsed_data[1]]
-        )
+        for key, value in _parsed_line[0].items():
+            if key in ("headers",) and not _global_metadata.get(key):
+                _global_metadata["headers"] = value
+            else:
+                _global_metadata[key] = value
+        _parsed_lines_output.append(_parsed_line[1])
 
-    return _metadata, _out_data
+    for _parse_entry in _parsed_lines_output:
+        _parsed_data.append((_global_metadata, _parse_entry))
+
+    return _parsed_data
 
 
-@log_parser
 def record_csv(
     file_content: str,
     headers: typing.List[str] | None = None,
     tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
     convert: bool = True,
     **kwargs,
-) -> TimeStampedData:
+) -> typing.List[TimeStampedData]:
     """Process a single line of a CSV file extracting the tracked values.
 
     Parameters
@@ -236,31 +249,47 @@ def record_csv(
     """
     # The delimiter parser assumes each line is a new data entry so
     # revert back to list of lines here
-    _file_lines: typing.List[str] = file_content.split("\n")
+    _file_lines: typing.List[str] = [i for i in file_content.split("\n") if i]
 
-    _metadata: typing.Dict[str, str | int | typing.List[str]]
-    _out_data: typing.Dict[str, typing.Any] | typing.List[typing.Dict[str, typing.Any]]
-    _metadata, _out_data = {}, []
+    _parsed_data: typing.List[TimeStampedData] = []
+    _global_metadata: typing.Dict[str, str | int | typing.List[str]] = {}
+
+    if headers:
+        _global_metadata["headers"] = headers
+
+    _parsed_lines_output: typing.List[typing.Dict[str, typing.Any]] = []
+
+    if not _file_lines:
+        return []
 
     for file_line in _file_lines:
-        _parsed_data: TimeStampedData = _record_any_delimited(
+        _parsed_line: TimeStampedData = _record_any_delimited(
             file_content=file_line,
             delimiter=",",
-            headers=headers,
             tracked_values=tracked_values,
             convert=convert,
-            **kwargs,
+            **(_global_metadata | kwargs),
         )
+
+        if not isinstance(_parsed_line, dict):
+            raise AssertionError(
+                "Expected parsed statement to return a dictionary of recorded data"
+            )
 
         # Make sure each line does not erase the previous metadata collected at the start
         # of processing the block, e.g. if headers are set. May have further use in future
         # if other info is extractable but not necessarily present in the first line
-        _metadata = {k: v for k, v in _parsed_data[0].items() if not _metadata.get(k)}
-        _out_data += (
-            _parsed_data[1] if isinstance(_parsed_data[1], list) else [_parsed_data[1]]
-        )
+        for key, value in _parsed_line[0].items():
+            if key in ("headers",) and not _global_metadata.get(key):
+                _global_metadata["headers"] = value
+            else:
+                _global_metadata[key] = value
+        _parsed_lines_output.append(_parsed_line[1])
 
-    return _metadata, _out_data
+    for _parse_entry in _parsed_lines_output:
+        _parsed_data.append((_global_metadata, _parse_entry))
+
+    return _parsed_data
 
 
 @log_parser
@@ -375,7 +404,7 @@ def record_log(
     input_file: str,
     tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
     convert: bool = True,
-    read_bytes: int | None = None,
+    __read_bytes: int | None = None,
     parser_func: typing.Callable | None = None,
     **parser_kwargs: typing.Dict[str, typing.Any],
 ) -> typing.List[TimeStampedData]:
@@ -394,8 +423,8 @@ def record_log(
         regular expressions defining the values to be monitored, by default None
     convert : bool, optional
         whether to convert parsed values to int, float etc, by default True
-    read_bytes : int | None, optional
-        if provided, the position in bytes from which to read the file, by default None
+    __read_bytes : int | None, optional
+        internally set if provided, the position in bytes from which to read the file, by default None
 
     Returns
     -------
@@ -403,27 +432,26 @@ def record_log(
         * metadata outlining properties such as modified time etc.
         * actual recorded data from the file.
     """
-    _read_bytes, _lines = tail_file_n_bytes(input_file, read_bytes)
+    __read_bytes, _lines = tail_file_n_bytes(input_file, __read_bytes)
 
     if parser_func:
         # In general parser functions are assumed to parse blocks of information
-        # so join lines into single string here
+        # so join lines into single string here, the number of bytes processed
+        # is passed into the parser so it is stored
         _parsed_content = parser_func(
             "\n".join(_lines),
             __input_file=input_file,
-            __read_bytes=_read_bytes,
+            __read_bytes=__read_bytes,
             convert=convert,
             **parser_kwargs,
         )
         return (
-            list(_parsed_content)
-            if isinstance(_parsed_content, (list, tuple, set))
-            else [_parsed_content]
+            _parsed_content if isinstance(_parsed_content, list) else [_parsed_content]
         )
     return [
         _process_log_content(
             __input_file=input_file,
-            __read_bytes=_read_bytes,
+            __read_bytes=__read_bytes,
             file_content=line,
             tracked_values=tracked_values,
             convert=convert,
