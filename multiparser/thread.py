@@ -206,6 +206,7 @@ class FileThreadLauncher:
         def _read_action(
             records: typing.List[typing.Tuple[str, str]],
             monitor_callback: typing.Callable = callback,
+            exception_callback: typing.Callable | None = self._exception_callback,
             file_name: str = file_name,
             termination_trigger: threading.Event = self._termination_trigger,
             interval: float = self._interval,
@@ -219,75 +220,78 @@ class FileThreadLauncher:
             flatten_data: bool = flatten_data,
         ) -> None:
             """Thread target function for parsing of detected file"""
+            try:
+                _cached_metadata: typing.Dict[str, str | int] = {}
 
-            _cached_metadata: typing.Dict[str, str | int] = {}
+                while not termination_trigger.is_set():
+                    time.sleep(interval)
 
-            while not termination_trigger.is_set():
-                time.sleep(interval)
-
-                # If the file does not exist yet then continue
-                if not os.path.exists(file_name):
-                    continue
-
-                _modified_time_stamp = os.path.getmtime(file_name)
-                _modified_time = datetime.datetime.fromtimestamp(
-                    _modified_time_stamp
-                ).strftime("%Y-%M-%d %H:%M:%S.%f")
-
-                # If the file has not been modified then we do not need to parse it
-                if (_modified_time, file_name) in records:
-                    continue
-
-                # Pass previous cached metadata to the parser in case required
-                _parsed = self._parsing_callback(
-                    file_name,
-                    tracked_vals,
-                    parser_func=cstm_parser,
-                    convert=convert,
-                    ignore_lines=ignore_lines,
-                    file_type=file_type,
-                    **(_cached_metadata | {k: v for k, v in kwargs.items() if v}),
-                )
-
-                # Some parsers return multiple results, e.g. those parsing multiple file lines
-                _parsed_list = [_parsed] if not isinstance(_parsed, list) else _parsed
-                _flattened_list = []
-
-                # If the parser method records a list of dictionaries as data
-                # we need to ensure these are handled in the same way as for parsers
-                # which return only a single data dictionary
-                for _meta, _entry in _parsed_list:
-                    if isinstance(_entry, (list, tuple, set)) and _entry:
-                        for section in _entry:
-                            _flattened_list.append((_meta, section))
-                    else:
-                        _flattened_list.append((_meta, _entry))
-
-                for _meta, _data in _flattened_list:
-                    # Keep latest
-                    _cached_metadata = _meta
-
-                    if not _data:
+                    # If the file does not exist yet then continue
+                    if not os.path.exists(file_name):
                         continue
 
-                    if flatten_data:
-                        _data = mp_parse.flatten_data(_data)
+                    _modified_time_stamp = os.path.getmtime(file_name)
+                    _modified_time = datetime.datetime.fromtimestamp(
+                        _modified_time_stamp
+                    ).strftime("%Y-%M-%d %H:%M:%S.%f")
 
-                    loguru.logger.debug(
-                        f"{file_name}: {_modified_time}: Recorded: {_data}"
+                    # If the file has not been modified then we do not need to parse it
+                    if (_modified_time, file_name) in records:
+                        continue
+
+                    # Pass previous cached metadata to the parser in case required
+                    _parsed = self._parsing_callback(
+                        file_name,
+                        tracked_vals,
+                        parser_func=cstm_parser,
+                        convert=convert,
+                        ignore_lines=ignore_lines,
+                        file_type=file_type,
+                        **(_cached_metadata | {k: v for k, v in kwargs.items() if v}),
                     )
 
-                    if lock:
-                        with lock:
+                    # Some parsers return multiple results, e.g. those parsing multiple file lines
+                    _parsed_list = [_parsed] if not isinstance(_parsed, list) else _parsed
+                    _flattened_list = []
+
+                    # If the parser method records a list of dictionaries as data
+                    # we need to ensure these are handled in the same way as for parsers
+                    # which return only a single data dictionary
+                    for _meta, _entry in _parsed_list:
+                        if isinstance(_entry, (list, tuple, set)) and _entry:
+                            for section in _entry:
+                                _flattened_list.append((_meta, section))
+                        else:
+                            _flattened_list.append((_meta, _entry))
+
+                    for _meta, _data in _flattened_list:
+                        # Keep latest
+                        _cached_metadata = _meta
+
+                        if not _data:
+                            continue
+
+                        if flatten_data:
+                            _data = mp_parse.flatten_data(_data)
+
+                        loguru.logger.debug(
+                            f"{file_name}: {_modified_time}: Recorded: {_data}"
+                        )
+
+                        if lock:
+                            with lock:
+                                monitor_callback(_data, _meta)
+                        else:
                             monitor_callback(_data, _meta)
-                    else:
-                        monitor_callback(_data, _meta)
 
-                records.append((_modified_time, file_name))
+                    records.append((_modified_time, file_name))
 
-                # If only a single read is requirement terminate loop
-                if static_read:
-                    break
+                    # If only a single read is requirement terminate loop
+                    if static_read:
+                        break
+            except Exception as e:
+                exception_callback(e.args[0])
+                raise e
 
         self._file_threads[file_name] = HandledThread(
             target=_read_action, args=(self._records,)

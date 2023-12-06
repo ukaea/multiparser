@@ -70,6 +70,7 @@ class FileMonitor:
         log_level: int | str = logging.INFO,
         flatten_data: bool = False,
         plain_logging: bool = False,
+        terminate_all_on_fail: bool = False
     ) -> None:
         """Create an instance of the file monitor for tracking file modifications.
 
@@ -100,18 +101,21 @@ class FileMonitor:
             whether to convert data to a single level dictionary of key-value pairs
         plain_logging : bool, optional
             turn off color/symbols in log outputs, default False
+        terminate_all_on_failure : bool, optional
+            abort all file monitors if exception thrown
         """
         self._interval: float = interval
         self._timeout: int | None = timeout
         self._per_thread_callback = per_thread_callback or _default_callback
         self._notification_callback = notification_callback
-        self._exception_callback = exception_callback
+        self._complete = termination_trigger or threading.Event()
+        self._shutdown_on_thread_failure: bool = terminate_all_on_fail
+        self._exception_callback = self._generate_exception_callback(exception_callback)
         self._file_threads_mutex: "threading.Lock | None" = (
             threading.Lock() if lock_callbacks else None
         )
         self._subprocess_triggers: typing.List[Event] | None = subprocess_triggers
         self._manual_abort: bool = termination_trigger is not None
-        self._complete = termination_trigger or threading.Event()
         self._abort_file_monitors = termination_trigger or threading.Event()
         self._known_files: typing.List[str] = []
         self._file_trackables: typing.List[FullFileTrackable] = []
@@ -130,6 +134,20 @@ class FileMonitor:
             colorize=not plain_logging,
             level=log_level,
         )
+
+    def _generate_exception_callback(self, user_callback: typing.Callable) -> typing.Callable:
+        def _exception_callback(
+            exception_msg: str,
+            user_defined=user_callback,
+            abort_on_fail=self._shutdown_on_thread_failure,
+            abort_func=self.terminate,
+        ) -> None:
+            if user_defined:
+                user_defined(exception_msg)
+            if abort_on_fail:
+                loguru.logger.error("Detected file monitor thread failure, aborting...")
+                abort_func(True)
+        return _exception_callback
 
     def _create_monitor_threads(self) -> None:
         """Create threads for the log file and full file monitors"""
@@ -287,7 +305,7 @@ class FileMonitor:
             a list of regular expressions defining variables to track
             within the file, by default None
         callback : typing.Callable | None, optional
-            override the global per file callback
+            override the global per file callback for this instance
         parser_func : typing.Callable | None, optional
             provide a custom parsing function
         parser_kwargs : typing.Dict | None, optional
@@ -382,7 +400,7 @@ class FileMonitor:
             list is None, then a capture group is used. If labels itself is
             None, it is assumed all matches have a label capture group.
         callback : typing.Callable | None, optional
-            override the global per file callback
+            override the global per file callback for this instance
         parser_func : typing.Callable | None, optional
             provide a custom parsing function
         parser_kwargs : typing.Dict | None, optional
