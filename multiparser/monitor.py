@@ -22,12 +22,14 @@ import re
 import string
 import sys
 import threading
+import contextlib
 import typing
 from multiprocessing.synchronize import Event
 
 import loguru
 
 import multiparser.thread as mp_thread
+import multiparser.exceptions as mp_exc
 from multiparser.typing import FullFileTrackable, LogFileTrackable, TrackedValues
 
 __all__ = ["FileMonitor"]
@@ -111,6 +113,7 @@ class FileMonitor:
         self._complete = termination_trigger or threading.Event()
         self._shutdown_on_thread_failure: bool = terminate_all_on_fail
         self._exception_callback = self._generate_exception_callback(exception_callback)
+        self._exceptions: typing.Dict[str, Exception] = {}
         self._file_threads_mutex: "threading.Lock | None" = (
             threading.Lock() if lock_callbacks else None
         )
@@ -121,8 +124,8 @@ class FileMonitor:
         self._file_trackables: typing.List[FullFileTrackable] = []
         self._log_trackables: typing.List[LogFileTrackable] = []
         self._excluded_patterns: typing.List[str] = []
-        self._file_monitor_thread: mp_thread.HandledThread | None = None
-        self._log_monitor_thread: mp_thread.HandledThread | None = None
+        self._file_monitor_thread: threading.Thread | None = None
+        self._log_monitor_thread: threading.Thread | None = None
         self._flatten_data: bool = flatten_data
 
         _plain_log: str = "{elapsed} | {level: <8} | multiparser | {message}"
@@ -137,16 +140,24 @@ class FileMonitor:
 
     def _generate_exception_callback(self, user_callback: typing.Callable) -> typing.Callable:
         def _exception_callback(
-            exception_msg: str,
+            exception: Exception,
             user_defined=user_callback,
             abort_on_fail=self._shutdown_on_thread_failure,
             abort_func=self.terminate,
         ) -> None:
+            print("YAYAYAYA")
             if user_defined:
-                user_defined(exception_msg)
+                user_defined(f"{type(exception).__name__}: '{exception.args[0]}'")
+
             if abort_on_fail:
                 loguru.logger.error("Detected file monitor thread failure, aborting...")
                 abort_func(True)
+
+            if isinstance(exception, mp_exc.FileMonitorThreadException):
+                self._exceptions |= exception.exceptions
+            else:
+                self._exceptions["__main__"] = exception
+            
         return _exception_callback
 
     def _create_monitor_threads(self) -> None:
@@ -167,13 +178,13 @@ class FileMonitor:
                 refresh_interval=interval,
                 file_list=file_list,
                 file_thread_lock=self._file_threads_mutex,
+                abort_on_fail=self._shutdown_on_thread_failure,
                 file_thread_termination_trigger=termination_trigger,
                 exception_callback=self._exception_callback,
                 notification_callback=self._notification_callback,
                 flatten_data=flatten_data,
             )
             _full_file_threads.run()
-            _full_file_threads.abort()
 
         def _log_file_monitor_func(
             lf_trackables: typing.List[LogFileTrackable],
@@ -192,16 +203,14 @@ class FileMonitor:
                 file_thread_lock=self._file_threads_mutex,
                 file_thread_termination_trigger=termination_trigger,
                 exception_callback=self._exception_callback,
+                abort_on_fail=self._shutdown_on_thread_failure,
                 notification_callback=self._notification_callback,
                 flatten_data=flatten_data,
             )
             _log_file_threads.run()
-            _log_file_threads.abort()
 
-        self._file_monitor_thread = mp_thread.HandledThread(
-            task_identifier="Full File Monitor",
+        self._file_monitor_thread = threading.Thread(
             target=_full_file_monitor_func,
-            throw_callback=self._exception_callback,
             args=(
                 self._file_trackables,
                 self._excluded_patterns,
@@ -212,10 +221,8 @@ class FileMonitor:
             ),
         )
 
-        self._log_monitor_thread = mp_thread.HandledThread(
-            task_identifier="Log File Monitor",
+        self._log_monitor_thread = threading.Thread(
             target=_log_file_monitor_func,
-            throw_callback=self._exception_callback,
             args=(
                 self._log_trackables,
                 self._excluded_patterns,
@@ -495,8 +502,11 @@ class FileMonitor:
         if not self._file_monitor_thread or not self._log_monitor_thread:
             raise AssertionError("FileMonitor must be used as a context manager.")
 
-        self._file_monitor_thread.join(self._timeout)
-        self._log_monitor_thread.join(self._timeout)
+        with contextlib.suppress(RuntimeError):
+            self._file_monitor_thread.join(self._timeout)
+
+        with contextlib.suppress(RuntimeError):
+            self._log_monitor_thread.join(self._timeout)
 
         if self._subprocess_triggers:
             for trigger in self._subprocess_triggers:
@@ -505,18 +515,13 @@ class FileMonitor:
         if not self._known_files:
             loguru.logger.warning("No files were processed during this session.")
 
-        if (
-            _exception := self._file_monitor_thread.exception
-            or self._log_monitor_thread.exception
-        ):
-            raise _exception
-
     def run(self) -> None:
         """Launch all monitors"""
         if not self._file_monitor_thread or not self._log_monitor_thread:
             raise AssertionError("FileMonitor must be used as a context manager.")
         self._file_monitor_thread.start()
         self._log_monitor_thread.start()
+
         if self._manual_abort:
             self.terminate(False)
 
@@ -528,3 +533,6 @@ class FileMonitor:
     def __exit__(self, *_, **__) -> None:
         """Set termination trigger"""
         self._complete.set()
+
+        if self._exceptions:
+            raise mp_exc.SessionFailure(self._exceptions)

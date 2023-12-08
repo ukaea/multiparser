@@ -2,9 +2,9 @@ import traceback
 import typing
 
 
-class ThreadException(Exception):
-    def __init__(self, thread_id: str, thread_exception: BaseException) -> None:
-        super().__init__(f"[{thread_id}] {thread_exception}")
+class FileMonitorThreadException(Exception):
+    def __init__(self, file_thread_exceptions: typing.Dict[str, Exception]) -> None:
+        self.exceptions = file_thread_exceptions
 
 
 class SessionFailure(Exception):

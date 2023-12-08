@@ -34,82 +34,6 @@ from multiparser.typing import (
 )
 
 
-class HandledThread(threading.Thread):
-    """Thread with Exception capture
-
-    Extension to the built-in Thread type storing any exception
-    throw information so it can be handled
-    """
-
-    def __init__(
-        self,
-        throw_callback: typing.Callable | None = None,
-        task_identifier: str | None = None,
-        *args,
-        **kwargs,
-    ) -> None:
-        """Initialise a thread with exception capture.
-
-        Parameters
-        ----------
-        task_identifier : str | None, optional
-            a unique identifier for this thread, by default None
-        """
-        self.task_description: str | None = task_identifier
-        self.exception: BaseException | None = None
-        self.callback = throw_callback
-        super().__init__(*args, **kwargs)
-        self._wrap_target()
-
-    def _wrap_target(self) -> None:
-        """Wrap the thread target in order to store any exception throws"""
-
-        def wrapper(func: typing.Callable) -> typing.Callable:
-            """Thread target wrapper for exception capture"""
-
-            def _inner(*args, **kwargs) -> typing.Any:
-                """Exception capture for thread target call"""
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    if self.callback:
-                        self.callback(e)
-                    self.exception = e
-
-            return _inner
-
-        self._target: typing.Callable = wrapper(self._target)
-
-
-def abort_on_fail(function: typing.Callable) -> typing.Callable:
-    """Decorator for setting termination event variable on failure.
-
-    A decorator has been used to assist testing of the underlying
-    functionality of the file thread launcher super-class.
-
-    Parameters
-    ----------
-    function : typing.Callable
-        the class method to trigger thread termination on failure
-
-    Returns
-    -------
-    typing.Callable
-        modified method
-    """
-
-    @functools.wraps(function)
-    def _wrapper(self: "FileThreadLauncher", *args, **kwargs) -> typing.Any:
-        """Decorator to trigger termination event if exception thrown"""
-        try:
-            return function(self, *args, **kwargs)
-        except Exception as e:
-            self._termination_trigger.set()
-            raise e
-
-    return _wrapper
-
-
 class FileThreadLauncher:
     """Base class for all file monitor thread launchers.
 
@@ -129,6 +53,7 @@ class FileThreadLauncher:
         file_thread_lock: typing.Any | None = None,
         file_list: typing.List[str] | None = None,
         flatten_data: bool = False,
+        abort_on_fail: bool = False
     ) -> None:
         """Create a new instance of the file monitor thread launcher.
 
@@ -159,19 +84,27 @@ class FileThreadLauncher:
             multiple threads.
         flatten_data : bool, optional
             whether to convert data to a single level dictionary of key-value pairs
+        abort_on_fail : bool, optional
+            whether to terminate all file threads if one fails
         """
         self._trackables: TrackableList = trackables
         self._exception_callback: typing.Callable | None = exception_callback
+        self._terminate_on_file_thread_fail: bool = abort_on_fail
         self._lock: typing.Any | None = file_thread_lock
         self._termination_trigger: threading.Event = file_thread_termination_trigger
         self._parsing_callback: typing.Callable = parsing_callback
         self._notifier: typing.Callable = notification_callback
-        self._file_threads: typing.Dict[str, HandledThread] = {}
+        self._file_threads: typing.Dict[str, threading.Thread] = {}
         self._exclude_globex: typing.List[str] | None = exclude_files_globex
         self._records: typing.List[typing.Tuple[str, str]] = []
         self._interval = refresh_interval
         self._monitored_files = file_list if file_list is not None else []
         self._flatten_data = flatten_data
+        self._exceptions: typing.Dict[str, Exception] = {}
+
+    @property
+    def exceptions(self) -> typing.Dict[str, Exception]:
+        return self._exceptions
 
     def _append_thread(
         self,
@@ -203,10 +136,17 @@ class FileThreadLauncher:
             convert values from string to numeric where appropriate
         """
 
+        def _thread_exception_callback(
+            exception: Exception,
+            target_file: str=file_name,
+            parent: "FileThreadLauncher"=self,
+        ) -> None:
+            parent._exceptions[target_file] = exception
+
         def _read_action(
             records: typing.List[typing.Tuple[str, str]],
             monitor_callback: typing.Callable = callback,
-            exception_callback: typing.Callable | None = self._exception_callback,
+            exception_callback=_thread_exception_callback,
             file_name: str = file_name,
             termination_trigger: threading.Event = self._termination_trigger,
             interval: float = self._interval,
@@ -220,9 +160,9 @@ class FileThreadLauncher:
             flatten_data: bool = flatten_data,
         ) -> None:
             """Thread target function for parsing of detected file"""
-            try:
-                _cached_metadata: typing.Dict[str, str | int] = {}
+            _cached_metadata: typing.Dict[str, str | int] = {}
 
+            try:
                 while not termination_trigger.is_set():
                     time.sleep(interval)
 
@@ -290,17 +230,19 @@ class FileThreadLauncher:
                     if static_read:
                         break
             except Exception as e:
-                exception_callback(e.args[0])
-                raise e
+                exception_callback(e)
 
-        self._file_threads[file_name] = HandledThread(
-            target=_read_action, args=(self._records,)
+        self._file_threads[file_name] = threading.Thread(
+            target=_read_action, args=(self._records,),
         )
 
-    @abort_on_fail
     def run(self) -> None:
         """Start the thread launcher"""
         while not self._termination_trigger.is_set():
+
+            if self.exceptions and self._terminate_on_file_thread_fail:
+                break
+
             time.sleep(self._interval)
             _excludes: typing.List[str] = []
             for expr in self._exclude_globex or []:
@@ -324,7 +266,9 @@ class FileThreadLauncher:
                         self._monitored_files.append(file)
                         self._append_thread(file, self._flatten_data, **trackable)
                         self._file_threads[file].start()
+                        self._exceptions[file] = None
                         _registered_files.append(file)
+        self._raise_exceptions()
 
     def _raise_exceptions(self) -> None:
         """Raise an exception summarising exception throws in all threads.
@@ -339,21 +283,11 @@ class FileThreadLauncher:
         mp_exc.SessionFailure
             an exception summarising all thread failures
         """
-        if not any(
-            (
-                _exceptions := {
-                    name: thread.exception
-                    for name, thread in self._file_threads.items()
-                    if thread.exception
-                }
-            ).values()
-        ):
+        if not any(self._exceptions.values()):
             return
-        raise mp_exc.SessionFailure(_exceptions)
 
-    def abort(self) -> None:
-        """Terminate the thread launcher"""
-        self._raise_exceptions()
+        self._exception_callback(mp_exc.FileMonitorThreadException(self._exceptions))
+
 
 
 class LogFileThreadLauncher(FileThreadLauncher):
@@ -374,6 +308,7 @@ class LogFileThreadLauncher(FileThreadLauncher):
         file_list: typing.List[str] | None = None,
         file_thread_lock: typing.Any | None = None,
         flatten_data: bool = False,
+        abort_on_fail: bool = False
     ) -> None:
         """Initialise a log file monitor thread launcher.
 
@@ -403,6 +338,8 @@ class LogFileThreadLauncher(FileThreadLauncher):
             multiple threads.
         flatten_data : bool, optional
             whether to convert data to a single level dictionary of key-value pairs
+        abort_on_fail : bool, optional
+            whether to terminate all file threads if one fails
         """
 
         super().__init__(
@@ -417,6 +354,7 @@ class LogFileThreadLauncher(FileThreadLauncher):
             file_thread_termination_trigger=file_thread_termination_trigger,
             exception_callback=exception_callback,
             flatten_data=flatten_data,
+            abort_on_fail=abort_on_fail
         )
 
 
@@ -438,6 +376,7 @@ class FullFileThreadLauncher(FileThreadLauncher):
         file_list: typing.List[str] | None = None,
         file_thread_lock: "threading.Lock | None" = None,
         flatten_data: bool = False,
+        abort_on_fail: bool = False
     ) -> None:
         """Initialise a full file monitor thread launcher.
 
@@ -468,6 +407,8 @@ class FullFileThreadLauncher(FileThreadLauncher):
             multiple threads.
         flatten_data : bool, optional
             whether to convert data to a single level dictionary of key-value pairs
+        abort_on_fail : bool, optional
+            whether to terminate all file threads if one fails
         """
 
         super().__init__(
@@ -482,4 +423,5 @@ class FullFileThreadLauncher(FileThreadLauncher):
             file_thread_termination_trigger=file_thread_termination_trigger,
             exception_callback=exception_callback,
             flatten_data=flatten_data,
+            abort_on_fail=abort_on_fail
         )
