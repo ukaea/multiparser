@@ -34,6 +34,34 @@ from multiparser.typing import (
 )
 
 
+def handle_monitor_thread_exception(function: typing.Callable) -> typing.Callable:
+    """Decorator for setting termination event variable on failure.
+
+    A decorator has been used to assist testing of the underlying
+    functionality of the file thread launcher super-class.
+
+    Parameters
+    ----------
+    function : typing.Callable
+        the class method to trigger thread termination on failure
+
+    Returns
+    -------
+    typing.Callable
+        modified method
+    """
+
+    @functools.wraps(function)
+    def _wrapper(self: "FileThreadLauncher", *args, **kwargs) -> typing.Any:
+        """Decorator to trigger termination event if exception thrown"""
+        try:
+            return function(self, *args, **kwargs)
+        except Exception as e:
+            self._exception_callback(e)
+            self._termination_trigger.set()
+    return _wrapper
+
+
 class FileThreadLauncher:
     """Base class for all file monitor thread launchers.
 
@@ -106,6 +134,7 @@ class FileThreadLauncher:
     def exceptions(self) -> typing.Dict[str, Exception]:
         return self._exceptions
 
+    @handle_monitor_thread_exception
     def _append_thread(
         self,
         file_name: str,
@@ -139,9 +168,9 @@ class FileThreadLauncher:
         def _thread_exception_callback(
             exception: Exception,
             target_file: str=file_name,
-            parent: "FileThreadLauncher"=self,
+            exceptions: typing.Dict[str, Exception]=self._exceptions,
         ) -> None:
-            parent._exceptions[target_file] = exception
+            exceptions[target_file] = exception
 
         def _read_action(
             records: typing.List[typing.Tuple[str, str]],
@@ -230,12 +259,15 @@ class FileThreadLauncher:
                     if static_read:
                         break
             except Exception as e:
-                exception_callback(e)
+                loguru.logger.error(f"{type(e).__name__} exception raised on thread during parsing of file '{file_name}'")
+                exception_callback(exception=e)
+                
 
         self._file_threads[file_name] = threading.Thread(
             target=_read_action, args=(self._records,),
         )
 
+    @handle_monitor_thread_exception
     def run(self) -> None:
         """Start the thread launcher"""
         while not self._termination_trigger.is_set():
@@ -264,11 +296,15 @@ class FileThreadLauncher:
                     if file not in self._file_threads and file not in _excludes:
                         self._notifier(file)
                         self._monitored_files.append(file)
+                        self._exceptions[file] = None
                         self._append_thread(file, self._flatten_data, **trackable)
                         self._file_threads[file].start()
-                        self._exceptions[file] = None
                         _registered_files.append(file)
         self._raise_exceptions()
+
+    def abort_threads(self) -> None:
+        for thread in self._file_threads.values():
+            thread.join()
 
     def _raise_exceptions(self) -> None:
         """Raise an exception summarising exception throws in all threads.
@@ -283,6 +319,9 @@ class FileThreadLauncher:
         mp_exc.SessionFailure
             an exception summarising all thread failures
         """
+        if self._terminate_on_file_thread_fail:
+            self.abort_threads()
+        
         if not any(self._exceptions.values()):
             return
 

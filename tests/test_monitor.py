@@ -67,7 +67,7 @@ def test_run_on_directory_all(
             if exception == "file_thread_exception":
                 raise TypeError("Oh dear!")
 
-        @mp_thread.abort_on_fail
+        @mp_thread.handle_monitor_thread_exception
         def fail_run(*_):
             raise AssertionError("Oh dear!")
 
@@ -77,23 +77,43 @@ def test_run_on_directory_all(
         ):
             mocker.patch.object(mp_thread.FileThreadLauncher, "run", fail_run)
 
-        with multiparser.FileMonitor(
-            per_thread_callback, interval=_interval, log_level=logging.INFO
-        ) as monitor:
-            monitor.track(os.path.join(temp_d, "*"))
-            monitor.exclude(os.path.join(temp_d, "*.toml"))
-            monitor.tail(**fake_log)
-            monitor.run()
-            for _ in range(10):
-                time.sleep(_interval)
+        _allowed_exception = None
+
+        if exception:
             if exception == "file_thread_exception":
-                with pytest.raises(mp_exc.SessionFailure):
-                    monitor.terminate()
-            elif exception and exception != "file_thread_exception":
-                with pytest.raises(AssertionError):
-                    monitor.terminate()
+                _allowed_exception = mp_exc.SessionFailure
             else:
+                _allowed_exception = AssertionError
+
+            with pytest.raises(_allowed_exception):
+                with multiparser.FileMonitor(
+                    per_thread_callback,
+                    interval=_interval,
+                    log_level=logging.INFO,
+                    terminate_all_on_fail=True
+                ) as monitor:
+                    monitor.track(os.path.join(temp_d, "*"))
+                    monitor.exclude(os.path.join(temp_d, "*.toml"))
+                    monitor.tail(**fake_log)
+                    monitor.run()
+                    for _ in range(10):
+                        time.sleep(_interval)
+                    monitor.terminate()
+        else:
+            with multiparser.FileMonitor(
+                per_thread_callback,
+                interval=_interval,
+                log_level=logging.INFO,
+                terminate_all_on_fail=True
+            ) as monitor:
+                monitor.track(os.path.join(temp_d, "*"))
+                monitor.exclude(os.path.join(temp_d, "*.toml"))
+                monitor.tail(**fake_log)
+                monitor.run()
+                for _ in range(10):
+                    time.sleep(_interval)
                 monitor.terminate()
+            
 
 
 @pytest.mark.monitor
@@ -129,7 +149,10 @@ def test_run_on_directory_filtered() -> None:
             )
 
         with multiparser.FileMonitor(
-            per_thread_callback, interval=_interval, flatten_data=True
+            per_thread_callback,
+            interval=_interval,
+            flatten_data=True,
+            terminate_all_on_fail=True
         ) as monitor:
             monitor.track(_csv_file, ["d_other", re.compile("\w_value")])
             monitor.track(_nml_file, [re.compile("\w_val_\w")])
@@ -197,7 +220,10 @@ def test_custom_data(stage: int, contains: typing.Tuple[str, ...]) -> None:
                 assert data[key] == value
 
     with multiparser.FileMonitor(
-        _validation_callback, interval=0.1, log_level=logging.DEBUG
+        _validation_callback,
+        interval=0.1,
+        log_level=logging.DEBUG,
+        terminate_all_on_fail=True
     ) as monitor:
         monitor.track(
             _file,
@@ -272,7 +298,8 @@ def test_parse_log_in_blocks() -> None:
             per_thread_callback=callback_check,
             termination_trigger=_termination_trigger,
             interval=0.1*_refresh_interval,
-            log_level=logging.DEBUG
+            log_level=logging.DEBUG,
+            terminate_all_on_fail=True
         ) as monitor:
             monitor.tail(
                 [temp_f.name],
@@ -354,7 +381,8 @@ def test_parse_delimited_in_blocks(delimiter, explicit_headers) -> None:
             per_thread_callback=callback_check,
             termination_trigger=_termination_trigger,
             interval=0.1*_refresh_interval,
-            log_level=logging.DEBUG
+            log_level=logging.DEBUG,
+            terminate_all_on_fail=True
         ) as monitor:
             monitor.tail(
                 [temp_f.name],
@@ -376,7 +404,8 @@ def test_parse_h5() -> None:
 
     with multiparser.FileMonitor(
         per_thread_callback=lambda *_, **__: (),
-        log_level=logging.DEBUG
+        log_level=logging.DEBUG,
+        terminate_all_on_fail=True
     ) as monitor:
         monitor.track(
             _data_file,

@@ -112,8 +112,8 @@ class FileMonitor:
         self._notification_callback = notification_callback
         self._complete = termination_trigger or threading.Event()
         self._shutdown_on_thread_failure: bool = terminate_all_on_fail
-        self._exception_callback = self._generate_exception_callback(exception_callback)
         self._exceptions: typing.Dict[str, Exception] = {}
+        self._exception_callback = self._generate_exception_callback(exception_callback)
         self._file_threads_mutex: "threading.Lock | None" = (
             threading.Lock() if lock_callbacks else None
         )
@@ -129,7 +129,7 @@ class FileMonitor:
         self._flatten_data: bool = flatten_data
 
         _plain_log: str = "{elapsed} | {level: <8} | multiparser | {message}"
-        _color_log: str = "{level.icon} | <green>{elapsed}</green>  | <level>{level: <8}</level> | <c>multiparse</c> | {message}"
+        _color_log: str = "{level.icon} | <green>{elapsed}</green>  | <level>{level: <8}</level> | <c>multiparser</c> | {message}"
 
         loguru.logger.add(
             sys.stderr,
@@ -141,11 +141,11 @@ class FileMonitor:
     def _generate_exception_callback(self, user_callback: typing.Callable) -> typing.Callable:
         def _exception_callback(
             exception: Exception,
+            _exceptions: dict[typing.Dict[str, Exception]]=self._exceptions,
             user_defined=user_callback,
             abort_on_fail=self._shutdown_on_thread_failure,
             abort_func=self.terminate,
         ) -> None:
-            print("YAYAYAYA")
             if user_defined:
                 user_defined(f"{type(exception).__name__}: '{exception.args[0]}'")
 
@@ -154,9 +154,9 @@ class FileMonitor:
                 abort_func(True)
 
             if isinstance(exception, mp_exc.FileMonitorThreadException):
-                self._exceptions |= exception.exceptions
+                _exceptions |= exception.exceptions
             else:
-                self._exceptions["__main__"] = exception
+                _exceptions["__main__"] = exception
             
         return _exception_callback
 
@@ -532,7 +532,11 @@ class FileMonitor:
 
     def __exit__(self, *_, **__) -> None:
         """Set termination trigger"""
-        self._complete.set()
+        self._file_monitor_thread.join(self._timeout)
+        self._log_monitor_thread.join(self._timeout)
+
+        if (_mon_thread_exc := self._exceptions.get("__main__")):
+            raise _mon_thread_exc
 
         if self._exceptions:
             raise mp_exc.SessionFailure(self._exceptions)
