@@ -7,7 +7,7 @@ pip install multiparser
 ```
 
 Multiparser has two optional extra components that can be installed:
-    
+
 * `arrow`: Adds compatibility with Apache Arrow file types.
 * `fortran`: Adds parsing of Fortran named lists.
 

@@ -16,20 +16,20 @@ __maintainer__ = "Kristian Zarebski"
 __email__ = "kristian.zarebski@ukaea.uk"
 __copyright__ = "Copyright 2023, United Kingdom Atomic Energy Authority"
 
+import contextlib
 import glob
 import logging
 import re
 import string
 import sys
 import threading
-import contextlib
 import typing
 from multiprocessing.synchronize import Event
 
 import loguru
 
-import multiparser.thread as mp_thread
 import multiparser.exceptions as mp_exc
+import multiparser.thread as mp_thread
 from multiparser.typing import FullFileTrackable, LogFileTrackable, TrackedValues
 
 __all__ = ["FileMonitor"]
@@ -72,7 +72,7 @@ class FileMonitor:
         log_level: int | str = logging.INFO,
         flatten_data: bool = False,
         plain_logging: bool = False,
-        terminate_all_on_fail: bool = False
+        terminate_all_on_fail: bool = False,
     ) -> None:
         """Create an instance of the file monitor for tracking file modifications.
 
@@ -138,10 +138,12 @@ class FileMonitor:
             level=log_level,
         )
 
-    def _generate_exception_callback(self, user_callback: typing.Callable) -> typing.Callable:
+    def _generate_exception_callback(
+        self, user_callback: typing.Callable
+    ) -> typing.Callable:
         def _exception_callback(
             exception: Exception,
-            _exceptions: dict[typing.Dict[str, Exception]]=self._exceptions,
+            _exceptions: dict[typing.Dict[str, Exception]] = self._exceptions,
             user_defined=user_callback,
             abort_on_fail=self._shutdown_on_thread_failure,
             abort_func=self.terminate,
@@ -157,7 +159,7 @@ class FileMonitor:
                 _exceptions |= exception.exceptions
             else:
                 _exceptions["__main__"] = exception
-            
+
         return _exception_callback
 
     def _create_monitor_threads(self) -> None:
@@ -535,7 +537,7 @@ class FileMonitor:
         self._file_monitor_thread.join(self._timeout)
         self._log_monitor_thread.join(self._timeout)
 
-        if (_mon_thread_exc := self._exceptions.get("__main__")):
+        if _mon_thread_exc := self._exceptions.get("__main__"):
             raise _mon_thread_exc
 
         if self._exceptions:
