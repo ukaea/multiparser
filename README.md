@@ -1,3 +1,7 @@
+<center>
+<img src="docs/media/logo.png", width="200">
+</center>
+
 # Multiparser
 
 _Multiparser_ is module for performing functionality across a set of output files. Given a set of files, and optionally a list of output parameter names or regex filters the module keeps track of changes by monitoring the "last modified" timestamp of each file and executing the assigned callback.

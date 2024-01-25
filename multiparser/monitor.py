@@ -377,18 +377,18 @@ class FileMonitor:
         * A single regular expression group, e.g. r'\d+' or r'(\d+)'
           with a name present in 'labels', e.g. "my_var".
 
-          tail(path_glob_exprs=[r'(\d+),', r'\d\.\d+'], labels=['my_var', 'other'])
+          tail(tracked_values=[r'(\d+),', r'\d\.\d+'], labels=['my_var', 'other'])
 
         * A double regular expression group, e.g. r'(\w+\_var)=(\d+)'
           where the first group is the label, and the second the value.
 
-          tail(path_glob_exprs=[r'(\w+\_var)=(\d+)'])
-          tail(path_glob_exprs=[r'(\w+\_var)=(\d+)',r'(\w+\_i=(\d+)'])
+          tail(tracked_values=[r'(\w+\_var)=(\d+)'])
+          tail(tracked_values=[r'(\w+\_var)=(\d+)',r'(\w+\_i=(\d+)'])
 
           This can be overwritten by providing a value for that group.
 
-          tail(path_glob_exprs=[r'(\w+\_var)=(\d+)'])
-          tail(path_glob_exprs=[r'(\w+\_var)=(\d+)',r'(\w+\_i=(\d+)'], labels=['my_var', None])
+          tail(tracked_values=[r'(\w+\_var)=(\d+)'])
+          tail(tracked_values=[r'(\w+\_var)=(\d+)',r'(\w+\_i=(\d+)'], labels=['my_var', None])
 
         Parameters
         ----------
