@@ -1,9 +1,9 @@
 # Installation
 
-Install Multiparser using pip:
+Multiparser requires Python 3.10+ and is installed using pip:
 
 ```bash
-pip install multiparser
+pip install git+https://git.ccfe.ac.uk/kzarebsk/multiparser
 ```
 
 Multiparser has two optional extra components that can be installed:
@@ -14,7 +14,11 @@ Multiparser has two optional extra components that can be installed:
 To install multiparser with any of these extras:
 
 ```bash
-pip install multiparser[arrow]
-pip install multiparser[fortran]
-pip install multiparser[arrow,fortran]
+pip install git+https://git.ccfe.ac.uk/kzarebsk/multiparser#egg=multiparser[arrow]
+```
+```bash
+pip install git+https://git.ccfe.ac.uk/kzarebsk/multiparser#egg=multiparser[fortran]
+```
+```bash
+pip install git+https://git.ccfe.ac.uk/kzarebsk/multiparser#egg=multiparser[arrow,fortran]
 ```

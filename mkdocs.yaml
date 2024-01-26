@@ -36,7 +36,13 @@ nav:
   - Home: index.md
   - Getting Started:
     - Installation: installation.md
+    - How it Works: how_it_works.md
+    - Basic Example: basic_example.md
+  - Concepts:
     - Parsing Types: tracking_and_tailing.md
+    - Custom and Lazy Parsing: lazy_and_custom_parsing.md
+  - Reference:
+    - File Monitor: file_monitor.md
 plugins:
   - search
   - mkdocstrings:
