@@ -376,21 +376,42 @@ class FileMonitor:
         Capture groups for the regular expressions defining the values
         to monitor can have two forms:
 
-        * A single regular expression group, e.g. r'\d+' or r'(\d+)'
-          with a name present in 'labels', e.g. "my_var".
+        * A single regular expression group, e.g. re.compile(r'\d+')
+          or re.compile(r'(\d+)') with a name present in 'labels',
+          e.g. "my_var".
 
-          tail(tracked_values=[r'(\d+),', r'\d\.\d+'], labels=['my_var', 'other'])
+          ```python
+          tail(
+            tracked_values=[re.compile(r'(\d+),'), re.compile(r'\d\.\d+')],
+            labels=['my_var', 'other']
+          )
+          ```
 
-        * A double regular expression group, e.g. r'(\w+\_var)=(\d+)'
+        * A double regular expression group, e.g. re.compile(r'(\w+\_var)=(\d+)')
           where the first group is the label, and the second the value.
 
-          tail(tracked_values=[r'(\w+\_var)=(\d+)'])
-          tail(tracked_values=[r'(\w+\_var)=(\d+)',r'(\w+\_i=(\d+)'])
+          ```python
+          tail(tracked_values=[re.compile(r'(\w+\_var)=(\d+)']))
+          tail(
+            tracked_values=[
+                re.compile(r'(\w+\_var)=(\d+)'),
+                re.compile(r'(\w+\_i=(\d+)')
+            ]
+          )
+          ```
 
           This can be overwritten by providing a value for that group.
 
-          tail(tracked_values=[r'(\w+\_var)=(\d+)'])
-          tail(tracked_values=[r'(\w+\_var)=(\d+)',r'(\w+\_i=(\d+)'], labels=['my_var', None])
+          ```python
+          tail(tracked_values=[re.compile(r'(\w+\_var)=(\d+)']))
+          tail(
+            tracked_values=[
+                re.compile(r'(\w+\_var)=(\d+)'),
+                re.compile(r'(\w+\_i=(\d+)')
+            ],
+            labels=['my_var', None]
+          )
+          ```
 
         Parameters
         ----------
