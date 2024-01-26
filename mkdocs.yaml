@@ -40,9 +40,13 @@ nav:
     - Basic Example: basic_example.md
   - Concepts:
     - Parsing Types: tracking_and_tailing.md
-    - Custom and Lazy Parsing: lazy_and_custom_parsing.md
+    - Built-in Parsers: builtin_parsers.md
+    - Custom Parsers: custom_parsers.md
   - Reference:
-    - File Monitor: file_monitor.md
+    - File Monitor:
+      - file_monitor.md
+      - Tracking: tracking.md
+      - Tailing: tailing.md
 plugins:
   - search
   - mkdocstrings:

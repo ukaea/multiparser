@@ -68,7 +68,7 @@ class FileMonitor:
         subprocess_triggers: typing.List[Event] | None = None,
         timeout: int | None = None,
         lock_callbacks: bool = True,
-        interval: float = 1e-3,
+        interval: float = 0.1,
         log_level: int | str = logging.INFO,
         flatten_data: bool = False,
         plain_logging: bool = False,
@@ -96,7 +96,7 @@ class FileMonitor:
             whether to only allow one thread to execute the callbacks
             at a time. Default is True.
         interval : float, optional
-            the refresh rate of the file monitors, by default 10.0 seconds
+            the refresh rate of the file monitors, by default 0.1 seconds
         log_level : int | str, optional
             log level for this object
         flatten_data : bool, optional

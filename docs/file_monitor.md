@@ -8,7 +8,8 @@ with multiparser.FileMonitor(
     exception_callback,
     notification_callback,
     termination_trigger,
-    timeout
+    timeout,
+    lock_callbacks
 ) as file_monitor:
     ...
 ```
@@ -65,3 +66,46 @@ If specificed, these are `multiprocessing.Event` objects which are `set` by the 
 ## `timeout`
 
 In a case where `termination_trigger` cannot be specified this is the time in seconds the `FileMonitor` will run before timing out.
+
+## `lock_callbacks`
+
+Whether to only allow a single file monitoring thread to execute the callback at a given time. Uses a mutex to prevent the callback being made by two threads at the same time.
+
+## `interval`
+
+File monitoring interval, i.e. how often the thread monitoring a file should check for any updates, the default is `0.1` seconds.
+
+## `log_level`
+
+Logger level for the `FileMonitor`, default is `logging.INFO`, for more information and the display recorded data set to `logging.DEBUG`.
+
+## `flatten_data`
+
+By default Multiparser will pass the data mapping assigning the result 'as is' as an argument to the specified callback. Alternatively if `flatten_data` is set to `True` a delimiter `.` is used to flatten the data into single level key-value pairs. Default is `False`.
+
+```python
+# Before
+data = {
+    "contents": {
+        "car": "ford",
+        "pet": "dog",
+        "house": "chalet"
+    }
+}
+
+# After
+
+data = {
+    "contents.car": "ford",
+    "contents.pet": "dog",
+    "contents.house": "chalet
+}
+```
+
+## `plain_logging`
+
+Disable the color formatted logger statements replacing them with plain text only, default is `False`.
+
+## `terminate_all_on_failure`
+
+If set all file threads are terminated when one fails, i.e. all activity is ceased in the case where a thread throws an exception. Default is `False`.
