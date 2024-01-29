@@ -45,8 +45,8 @@ nav:
   - Reference:
     - File Monitor:
       - file_monitor.md
-      - Tracking: tracking.md
-      - Tailing: tailing.md
+      - tracking.md
+      - tailing.md
 plugins:
   - search
   - mkdocstrings:
@@ -91,7 +91,7 @@ theme:
   palette:
     # Palette toggle for light mode
     - scheme: default
-      primary: deep purple
+      primary: teal
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode

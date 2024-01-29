@@ -87,8 +87,10 @@ pages:
   stage: pages
   only:
     - main
+  <<: *setup_unit
   dependencies: ["pylint", "Unit Tests"]
   script:
+    - poetry run mkdocs build -d public
     - mkdir -p public/files/media/
     - mkdir -p public/files/logs/
     - mv htmlcov/* public/
