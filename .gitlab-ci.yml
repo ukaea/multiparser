@@ -86,7 +86,7 @@ sonarqube-check:
 pages:
   stage: pages
   only:
-    - main
+    - docs
   <<: *setup_unit
   dependencies: ["pylint", "Unit Tests"]
   script:
