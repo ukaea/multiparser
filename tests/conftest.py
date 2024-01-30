@@ -116,12 +116,13 @@ def fake_delimited_log(request) -> (
                 _out_line = _delimiter.join([_regex_gen.xeger(_gen_regex) for _ in range(5)])
                 out_f.writelines([_out_line])
 
-    with tempfile.NamedTemporaryFile(suffix=_suffix) as temp_f:
+    with tempfile.TemporaryDirectory() as temp_d:
+        _file_name: str = os.path.join(temp_d, f"dummy.{_suffix}")
         _process = multiprocessing.Process(
-            target=_write_dummy_data, args=(temp_f.name,)
+            target=_write_dummy_data, args=(_file_name,)
         )
         _process.start()
-        yield temp_f.name
+        yield _file_name
         _process.join()
 
 
@@ -154,13 +155,14 @@ def fake_log(request) -> (
                 _out_line += _regex_gen.xeger(_rand_regex_2)
                 out_f.writelines([_out_line])
 
-    with tempfile.NamedTemporaryFile(suffix=".log") as temp_f:
+    with tempfile.TemporaryDirectory() as temp_d:
+        _file_name: str = os.path.join(temp_d, "dummy.log")
         _process = multiprocessing.Process(
-            target=_write_dummy_data, args=(temp_f.name,)
+            target=_write_dummy_data, args=(_file_name,)
         )
         _process.start()
         yield {
-            "path_glob_exprs": temp_f.name,
+            "path_glob_exprs": _file_name,
             "tracked_values": (_rand_regex_1, _rand_regex_2),
             "labels": ("var_1", "var_2") if _labels else (None, None)
         }
