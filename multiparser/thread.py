@@ -59,6 +59,7 @@ def handle_monitor_thread_exception(function: typing.Callable) -> typing.Callabl
         except Exception as e:
             self._exception_callback(e)
             self._termination_trigger.set()
+
     return _wrapper
 
 
@@ -81,7 +82,7 @@ class FileThreadLauncher:
         file_thread_lock: typing.Any | None = None,
         file_list: typing.List[str] | None = None,
         flatten_data: bool = False,
-        abort_on_fail: bool = False
+        abort_on_fail: bool = False,
     ) -> None:
         """Create a new instance of the file monitor thread launcher.
 
@@ -167,8 +168,8 @@ class FileThreadLauncher:
 
         def _thread_exception_callback(
             exception: Exception,
-            target_file: str=file_name,
-            exceptions: typing.Dict[str, Exception]=self._exceptions,
+            target_file: str = file_name,
+            exceptions: typing.Dict[str, Exception] = self._exceptions,
         ) -> None:
             exceptions[target_file] = exception
 
@@ -220,7 +221,9 @@ class FileThreadLauncher:
                     )
 
                     # Some parsers return multiple results, e.g. those parsing multiple file lines
-                    _parsed_list = [_parsed] if not isinstance(_parsed, list) else _parsed
+                    _parsed_list = (
+                        [_parsed] if not isinstance(_parsed, list) else _parsed
+                    )
                     _flattened_list = []
 
                     # If the parser method records a list of dictionaries as data
@@ -259,19 +262,20 @@ class FileThreadLauncher:
                     if static_read:
                         break
             except Exception as e:
-                loguru.logger.error(f"{type(e).__name__} exception raised on thread during parsing of file '{file_name}'")
+                loguru.logger.error(
+                    f"{type(e).__name__} exception raised on thread during parsing of file '{file_name}': {e}"
+                )
                 exception_callback(exception=e)
-                
 
         self._file_threads[file_name] = threading.Thread(
-            target=_read_action, args=(self._records,),
+            target=_read_action,
+            args=(self._records,),
         )
 
     @handle_monitor_thread_exception
     def run(self) -> None:
         """Start the thread launcher"""
         while not self._termination_trigger.is_set():
-
             if self.exceptions and self._terminate_on_file_thread_fail:
                 break
 
@@ -321,12 +325,11 @@ class FileThreadLauncher:
         """
         if self._terminate_on_file_thread_fail:
             self.abort_threads()
-        
+
         if not any(self._exceptions.values()):
             return
 
         self._exception_callback(mp_exc.FileMonitorThreadException(self._exceptions))
-
 
 
 class LogFileThreadLauncher(FileThreadLauncher):
@@ -347,7 +350,7 @@ class LogFileThreadLauncher(FileThreadLauncher):
         file_list: typing.List[str] | None = None,
         file_thread_lock: typing.Any | None = None,
         flatten_data: bool = False,
-        abort_on_fail: bool = False
+        abort_on_fail: bool = False,
     ) -> None:
         """Initialise a log file monitor thread launcher.
 
@@ -393,7 +396,7 @@ class LogFileThreadLauncher(FileThreadLauncher):
             file_thread_termination_trigger=file_thread_termination_trigger,
             exception_callback=exception_callback,
             flatten_data=flatten_data,
-            abort_on_fail=abort_on_fail
+            abort_on_fail=abort_on_fail,
         )
 
 
@@ -415,7 +418,7 @@ class FullFileThreadLauncher(FileThreadLauncher):
         file_list: typing.List[str] | None = None,
         file_thread_lock: "threading.Lock | None" = None,
         flatten_data: bool = False,
-        abort_on_fail: bool = False
+        abort_on_fail: bool = False,
     ) -> None:
         """Initialise a full file monitor thread launcher.
 
@@ -462,5 +465,5 @@ class FullFileThreadLauncher(FileThreadLauncher):
             file_thread_termination_trigger=file_thread_termination_trigger,
             exception_callback=exception_callback,
             flatten_data=flatten_data,
-            abort_on_fail=abort_on_fail
+            abort_on_fail=abort_on_fail,
         )

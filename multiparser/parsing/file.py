@@ -238,6 +238,6 @@ def record_file(
             return _full_file_parse(parser, input_file, _tracked_vals)
 
     loguru.logger.error(
-        f"The file extension '{_extension}' is not supported for 'record_file' without custom parsing"
+        f"The file extension '{_extension}' for file '{input_file}' is not supported for 'record_file' without custom parsing"
     )
     raise TypeError(f"File of type '{_extension}' could not be recognised")
