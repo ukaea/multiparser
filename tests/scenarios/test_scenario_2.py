@@ -4,8 +4,8 @@ import os.path
 import random
 import tempfile
 import time
-import re
 import typing
+import re
 
 import pytest
 import xeger
@@ -15,27 +15,33 @@ import multiparser
 
 def run_dummy_analysis(
     output_dir: str, termination_trigger: multiprocessing.synchronize.Event
-) -> None:
-    _results_file_csv: str = os.path.join(output_dir, "out.csv")
+) -> None:   
     _xeger = xeger.Xeger()
+    time_step: float = 0.1
+    lines_per_file: int = 4
+
     while not termination_trigger.is_set():
-        time.sleep(0.1)
+        time.sleep(time_step)
+        time_str = f"{time_step:.1f}".replace('.', '_')
+        _results_file_csv: str = os.path.join(output_dir, f"out_{time_str}.csv")
         try:
             with open(_results_file_csv, "a") as out_f:
                 # Simulate a block being written to the output
-                out_f.writelines(
-                    [
-                        datetime.datetime.now().strftime("%Y-%M-%d %H:%M:%S\tvalue=")
-                        + _xeger.xeger(r"\d+")
-                        + "\t"
-                        + _xeger.xeger(r"\d+")
-                        + _xeger.xeger(r"\d+")
-                        + "\n"
-                        for _ in range(random.randint(1, 4))
-                    ]
-                )
+                for _ in range(lines_per_file):
+                    out_f.writelines(
+                        [
+                            datetime.datetime.now().strftime(f"%Y-%M-%d %H:%M:%S\tvalue_{time_str}=")
+                            + _xeger.xeger(r"\d+")
+                            + "\t"
+                            + _xeger.xeger(r"\d+")
+                            + _xeger.xeger(r"\d+")
+                            + "\n"
+                            for _ in range(random.randint(1, 4))
+                        ]
+                    )
         except FileNotFoundError:
             pass
+        time_step += 0.1
 
 
 def per_file_callback(
@@ -53,11 +59,7 @@ def test_scenario_1() -> None:
         )
         _process.start()
         with multiparser.FileMonitor(per_thread_callback=per_file_callback) as monitor:
-            monitor.tail(
-                path_glob_exprs=os.path.join(temp_d, "*.csv"),
-                tracked_values=[re.compile(r"value=(\d+)")],
-                labels=["entry"]
-            )
+            monitor.tail(os.path.join(temp_d, "*.csv"), [re.compile(r"(value_\d+_\d+)=(\d+)")])
             monitor.run()
             time.sleep(10)
             monitor.terminate()

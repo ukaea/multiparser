@@ -290,6 +290,7 @@ class FileMonitor:
 
     def track(
         self,
+        *,
         path_glob_exprs: typing.List[str] | str,
         tracked_values: TrackedValues | None = None,
         callback: typing.Callable | None = None,
@@ -359,6 +360,7 @@ class FileMonitor:
 
     def tail(
         self,
+        *,
         path_glob_exprs: typing.List[str] | str,
         tracked_values: TrackedValues | None = None,
         skip_lines_w_pattern: typing.List[typing.Pattern | str] | None = None,

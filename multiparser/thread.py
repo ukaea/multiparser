@@ -190,6 +190,19 @@ class FileThreadLauncher:
             flatten_data: bool = flatten_data,
         ) -> None:
             """Thread target function for parsing of detected file"""
+            tofile = (
+                "I have pid:"
+                + str(os.getpid())
+                + " and tid:"
+                + str(threading.get_ident())
+                + "\n"
+            )
+            # print("I am thread " + str(os.getpid()))
+            import random
+
+            temp_test_file = "/tmp/AAAA" + str(random.getrandbits(64)) + ".txt"
+            with open(temp_test_file, "w") as file:
+                file.write(tofile)
             _cached_metadata: typing.Dict[str, str | int] = {}
 
             try:
