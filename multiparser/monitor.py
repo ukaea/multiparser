@@ -118,7 +118,7 @@ class FileMonitor:
             threading.Lock() if lock_callbacks else None
         )
         self._subprocess_triggers: typing.List[Event] | None = subprocess_triggers
-        self._manual_abort: bool = termination_trigger is not None
+        self._manual_abort: bool = termination_trigger is None
         self._abort_file_monitors = termination_trigger or threading.Event()
         self._known_files: typing.List[str] = []
         self._file_trackables: typing.List[FullFileTrackable] = []
@@ -131,7 +131,7 @@ class FileMonitor:
         _plain_log: str = "{elapsed} | {level: <8} | multiparser | {message}"
         _color_log: str = "{level.icon} | <green>{elapsed}</green>  | <level>{level: <8}</level> | <c>multiparser</c> | {message}"
 
-        loguru.logger.add(
+        self._log_id = loguru.logger.add(
             sys.stderr,
             format=_plain_log if plain_logging else _color_log,
             colorize=not plain_logging,
@@ -547,8 +547,8 @@ class FileMonitor:
         self._file_monitor_thread.start()
         self._log_monitor_thread.start()
 
-        if self._manual_abort:
-            self.terminate(False)
+        if not self._manual_abort:
+            self.terminate(self._manual_abort)
 
     def __enter__(self) -> "FileMonitor":
         """Setup all threads"""
@@ -565,3 +565,5 @@ class FileMonitor:
 
         if self._exceptions:
             raise mp_exc.SessionFailure(self._exceptions)
+            
+        loguru.logger.remove(self._log_id)
