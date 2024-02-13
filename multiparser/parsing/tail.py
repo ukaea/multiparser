@@ -505,7 +505,7 @@ def record_log(
         # so join lines into single string here, the number of bytes processed
         # is passed into the parser so it is stored
         _parsed_content = parser_func(
-            "\n".join(_lines),
+            "".join(_lines),
             __input_file=input_file,
             __read_bytes=__read_bytes,
             convert=convert,
