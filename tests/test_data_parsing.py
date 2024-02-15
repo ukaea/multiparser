@@ -145,6 +145,7 @@ def test_parse_log(fake_log, request) -> None:
 )
 def test_parse_delimited(fake_delimited_log, request, header) -> None:
     _file = fake_delimited_log
+    print(f"FILE_RECEIVED: {_file}")
 
     _, expected_output = request.node.get_closest_marker("parametrize").args
 

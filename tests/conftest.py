@@ -8,6 +8,7 @@ import typing
 import json
 import yaml
 import pickle
+import pathlib
 
 import pandas
 import pytest
@@ -118,6 +119,7 @@ def fake_delimited_log(request) -> (
 
     with tempfile.TemporaryDirectory() as temp_d:
         _file_name: str = os.path.join(temp_d, f"dummy.{_suffix}")
+        pathlib.Path(_file_name).touch()
         _process = multiprocessing.Process(
             target=_write_dummy_data, args=(_file_name,)
         )

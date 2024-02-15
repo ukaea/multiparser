@@ -42,6 +42,10 @@ mktestdocs = "^0.2.1"
 mkdocstrings = {extras = ["python"], version = "^0.24.0"}
 mike = "^2.0.0"
 
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29.0"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

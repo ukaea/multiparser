@@ -59,7 +59,11 @@ def test_scenario_1() -> None:
         )
         _process.start()
         with multiparser.FileMonitor(per_thread_callback=per_file_callback) as monitor:
-            monitor.tail(os.path.join(temp_d, "*.csv"), [re.compile(r"(value_\d+_\d+)=(\d+)")])
+            monitor.track(
+                path_glob_exprs=os.path.join(temp_d, "*.csv"),
+                tracked_values=[re.compile(r"(value_\d+_\d+)=(\d+)")],
+                static=True
+            )
             monitor.run()
             time.sleep(10)
             monitor.terminate()
