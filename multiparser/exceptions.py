@@ -3,7 +3,9 @@ import typing
 
 
 class FileMonitorThreadException(Exception):
-    def __init__(self, file_thread_exceptions: typing.Dict[str, Exception]) -> None:
+    def __init__(
+        self, file_thread_exceptions: typing.Dict[str, Exception | None]
+    ) -> None:
         self.exceptions = file_thread_exceptions
 
 

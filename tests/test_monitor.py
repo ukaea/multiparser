@@ -415,4 +415,40 @@ def test_parse_h5() -> None:
         )
         monitor.run()
         monitor.terminate()
+
+
+@pytest.mark.monitor
+def test_timeout_trigger() -> None:
+    _timeout: int = 5
+    _test_passed = multiprocessing.Value('i', 0)
+
+    def timer_test(trigger, timeout, passed) -> None:
+        _start_time = time.time()
+        _test_timeout = 0
+        while not trigger.is_set():
+            _test_timeout += 0.1
+            time.sleep(0.1)
+            if _test_timeout >= timeout + 2:
+                passed.value = 1000000
+                return
+        _end_time = time.time()
+        passed.value = int(_end_time - _start_time)
     
+    with multiparser.FileMonitor(
+        per_thread_callback=lambda *_, **__: (),
+        log_level=logging.DEBUG,
+        timeout=_timeout,
+        terminate_all_on_fail=True
+    ) as monitor:
+        monitor.run()
+        _process = multiprocessing.Process(
+            target=timer_test,
+            args=(monitor._monitor_termination_trigger, _timeout, _test_passed)
+        )
+
+        _process.start()
+        _process.join()
+
+        if _test_passed.value == 1000000:
+            raise AssertionError("Test failed due to infinite loop")
+        assert _test_passed.value == _timeout

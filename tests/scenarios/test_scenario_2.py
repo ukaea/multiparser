@@ -16,6 +16,7 @@ import multiparser
 def run_dummy_analysis(
     output_dir: str, termination_trigger: multiprocessing.synchronize.Event
 ) -> None:   
+    """Run dummy analysis where multiple files are written containing data blocks""" 
     _xeger = xeger.Xeger()
     time_step: float = 0.1
     lines_per_file: int = 4
@@ -51,7 +52,7 @@ def per_file_callback(
 
 
 @pytest.mark.scenario
-def test_scenario_1() -> None:
+def test_scenario_2() -> None:
     _trigger = multiprocessing.Event()
     with tempfile.TemporaryDirectory() as temp_d:
         _process = multiprocessing.Process(
@@ -72,4 +73,4 @@ def test_scenario_1() -> None:
 
 
 if __name__ in "__main__":
-    test_scenario_1()
+    test_scenario_2()

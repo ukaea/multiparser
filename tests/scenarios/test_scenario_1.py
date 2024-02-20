@@ -16,6 +16,7 @@ import multiparser
 def run_dummy_analysis(
     output_dir: str, termination_trigger: multiprocessing.synchronize.Event
 ) -> None:
+    """Run analysis where a single file is written containing increasing data blocks"""
     _results_file_csv: str = os.path.join(output_dir, "out.csv")
     _xeger = xeger.Xeger()
     while not termination_trigger.is_set():

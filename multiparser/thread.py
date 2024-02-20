@@ -57,7 +57,8 @@ def handle_monitor_thread_exception(function: typing.Callable) -> typing.Callabl
         try:
             return function(self, *args, **kwargs)
         except Exception as e:
-            self._exception_callback(e)
+            if self._exception_callback:
+                self._exception_callback(e)
             self._termination_trigger.set()
 
     return _wrapper
@@ -129,10 +130,10 @@ class FileThreadLauncher:
         self._interval = refresh_interval
         self._monitored_files = file_list if file_list is not None else []
         self._flatten_data = flatten_data
-        self._exceptions: typing.Dict[str, Exception] = {}
+        self._exceptions: typing.Dict[str, Exception | None] = {}
 
     @property
-    def exceptions(self) -> typing.Dict[str, Exception]:
+    def exceptions(self) -> typing.Dict[str, Exception | None]:
         return self._exceptions
 
     @handle_monitor_thread_exception
@@ -169,7 +170,7 @@ class FileThreadLauncher:
         def _thread_exception_callback(
             exception: Exception,
             target_file: str = file_name,
-            exceptions: typing.Dict[str, Exception] = self._exceptions,
+            exceptions: typing.Dict[str, Exception | None] = self._exceptions,
         ) -> None:
             exceptions[target_file] = exception
 
@@ -190,19 +191,7 @@ class FileThreadLauncher:
             flatten_data: bool = flatten_data,
         ) -> None:
             """Thread target function for parsing of detected file"""
-            tofile = (
-                "I have pid:"
-                + str(os.getpid())
-                + " and tid:"
-                + str(threading.get_ident())
-                + "\n"
-            )
-            # print("I am thread " + str(os.getpid()))
-            import random
 
-            temp_test_file = "/tmp/AAAA" + str(random.getrandbits(64)) + ".txt"
-            with open(temp_test_file, "w") as file:
-                file.write(tofile)
             _cached_metadata: typing.Dict[str, str | int] = {}
 
             try:
@@ -342,7 +331,10 @@ class FileThreadLauncher:
         if not any(self._exceptions.values()):
             return
 
-        self._exception_callback(mp_exc.FileMonitorThreadException(self._exceptions))
+        if self._exception_callback:
+            self._exception_callback(
+                mp_exc.FileMonitorThreadException(self._exceptions)
+            )
 
 
 class LogFileThreadLauncher(FileThreadLauncher):
