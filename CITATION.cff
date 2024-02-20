@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+title: Multiparser
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Kristian
+    family-names: Zarebski
+    orcid: 'https://orcid.org/0000-0002-6773-1049'
+    affiliation: United Kingdom Atomic Energy Authority
+  - given-names: Aby
+    family-names: Abraham
+    affiliation: United Kingdom Atomic Energy Authority
+  - given-names: Andrew
+    family-names: Lahiff
+    affiliation: United Kingdom Atomic Energy Authority
+  - given-names: James
+    family-names: Panayis
+    affiliation: United Kingdom Atomic Energy Authority
+abstract: >-
+  A parallel parsing module for Python allowing dynamic
+  extraction of data from files.
+keywords:
+  - parsing
+license: GPL-3.0
