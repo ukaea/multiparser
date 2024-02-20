@@ -69,7 +69,8 @@ import multiprocessing
 trigger = multiprocessing.Event()
 ```
 
-Not needed if `timeout` is specified.blu
+Not needed if `timeout` is specified. Note if both `timeout` and `termination_trigger` are specified, termination will occur when either the trigger is set externally, or the timeout period is reached.
+
 
 ## `subprocess_triggers`
 `#!python list[multiprocessing.synchronize.Event] | None`
@@ -83,7 +84,8 @@ If specified, these are `multiprocessing.Event` objects which are `set` by the `
 
 Default: `None`
 
-In a case where `termination_trigger` cannot be specified this is the time in seconds the `FileMonitor` will run before timing out.
+In a case where `termination_trigger` cannot be specified this is the time in seconds the `FileMonitor` will run before timing out. Note if both `timeout` and `termination_trigger` are specified, termination will occur when either the trigger is set externally, or the timeout period is reached.
+
 
 ## `lock_callbacks`
 `#!python bool`
