@@ -75,6 +75,7 @@ class FileMonitor:
         flatten_data: bool = False,
         plain_logging: bool = False,
         terminate_all_on_fail: bool = False,
+        file_limit: int | None = 50,
     ) -> None:
         """Create an instance of the file monitor for tracking file modifications.
 
@@ -106,7 +107,10 @@ class FileMonitor:
         plain_logging : bool, optional
             turn off color/symbols in log outputs, default False
         terminate_all_on_failure : bool, optional
-            abort all file monitors if exception thrown
+            abort all file monitors if exception thrown, default False
+        file_limit : int, optional
+            maximum number of files to be monitored, limits number of threads
+            each of the two monitor types can start, if None no limit. Default 100.
         """
         self._interval: float = interval
         self._timeout: int | None = timeout
@@ -130,6 +134,7 @@ class FileMonitor:
         self._log_monitor_thread: threading.Thread | None = None
         self._timer_process: multiprocessing.Process | None = None
         self._flatten_data: bool = flatten_data
+        self._thread_limit: int | None = file_limit
 
         _plain_log: str = "{elapsed} | {level: <8} | multiparser | {message}"
         _color_log: str = "{level.icon} | <green>{elapsed}</green>  | <level>{level: <8}</level> | <c>multiparser</c> | {message}"
@@ -181,6 +186,7 @@ class FileMonitor:
                 trackables=ff_trackables,
                 exclude_files_globex=exc_glob_exprs,
                 refresh_interval=interval,
+                file_limit=self._thread_limit,
                 file_list=file_list,
                 file_thread_lock=self._file_threads_mutex,
                 abort_on_fail=self._shutdown_on_thread_failure,
@@ -204,6 +210,7 @@ class FileMonitor:
                 trackables=lf_trackables,
                 exclude_files_globex=exc_glob_exprs,
                 refresh_interval=interval,
+                file_limit=self._thread_limit,
                 file_list=file_list,
                 file_thread_lock=self._file_threads_mutex,
                 file_thread_termination_trigger=termination_trigger,

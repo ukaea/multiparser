@@ -147,3 +147,10 @@ Disable the color formatted logger statements replacing them with plain text onl
 Default: `False`
 
 If set all file threads are terminated when one fails, i.e. all activity is ceased in the case where a thread throws an exception.
+
+## `file_limit`
+`#!python int | None`
+
+Default: `50`
+
+The number of allowed concurrent _running_ threads for each of the two file monitor types, track and tail. If `None` then there is no limit.

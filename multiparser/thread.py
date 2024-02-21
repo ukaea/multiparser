@@ -78,6 +78,7 @@ class FileThreadLauncher:
         notification_callback: typing.Callable,
         refresh_interval: float,
         trackables: TrackableList,
+        file_limit: int | None,
         exclude_files_globex: typing.List[str] | None,
         exception_callback: typing.Callable | None = None,
         file_thread_lock: typing.Any | None = None,
@@ -103,6 +104,8 @@ class FileThreadLauncher:
                 - globular expression for file capture
                 - regular_expressions for variable tracking within files
                 - whether the file is static (written once) or changing
+        file_limit : int, optional
+            place a limit on the number of files that can be monitored
         exclude_files_globex : typing.List[str] | None
             a list of globular expressions for files to exclude
         exception_callback : typing.Callable | None, optional
@@ -131,10 +134,15 @@ class FileThreadLauncher:
         self._monitored_files = file_list if file_list is not None else []
         self._flatten_data = flatten_data
         self._exceptions: typing.Dict[str, Exception | None] = {}
+        self._file_limit: int | None = file_limit
 
     @property
     def exceptions(self) -> typing.Dict[str, Exception | None]:
         return self._exceptions
+
+    @property
+    def n_running(self) -> int:
+        return sum(thread.is_alive() for thread in self._file_threads.values())
 
     @handle_monitor_thread_exception
     def _append_thread(
@@ -260,7 +268,7 @@ class FileThreadLauncher:
 
                     records.append((_modified_time, file_name))
 
-                    # If only a single read is requirement terminate loop
+                    # If only a single read is required terminate loop
                     if static_read:
                         break
             except Exception as e:
@@ -300,6 +308,12 @@ class FileThreadLauncher:
                             f"File '{file}' cannot be tracked above once."
                         )
                     if file not in self._file_threads and file not in _excludes:
+                        if self._file_limit and self.n_running >= self._file_limit:
+                            loguru.logger.warning(
+                                f"Reached file limit, cannot parse '{file}'"
+                            )
+                            continue
+
                         self._notifier(file)
                         self._monitored_files.append(file)
                         self._exceptions[file] = None
@@ -349,6 +363,7 @@ class LogFileThreadLauncher(FileThreadLauncher):
         trackables: typing.List[LogFileTrackable],
         file_thread_termination_trigger: threading.Event,
         refresh_interval: float,
+        file_limit: int | None,
         exclude_files_globex: typing.List[str] | None,
         exception_callback: typing.Callable | None = None,
         notification_callback: typing.Callable | None = None,
@@ -371,6 +386,8 @@ class LogFileThreadLauncher(FileThreadLauncher):
             monitor loops
         refresh_interval : float
             how often to check for new files
+        file_limit : int, optional
+            place a limit on the number of files that can be monitored
         exclude_files_globex : typing.List[str] | None
             a list of globular expressions for files to exclude
         exception_callback : typing.Callable | None, optional
@@ -394,6 +411,7 @@ class LogFileThreadLauncher(FileThreadLauncher):
             refresh_interval=refresh_interval,
             file_thread_lock=file_thread_lock,
             trackables=trackables,
+            file_limit=file_limit,
             notification_callback=notification_callback
             or (lambda item: loguru.logger.info(f"Found NEW log '{item}'")),
             exclude_files_globex=exclude_files_globex,
@@ -417,6 +435,7 @@ class FullFileThreadLauncher(FileThreadLauncher):
         trackables: typing.List[FullFileTrackable],
         file_thread_termination_trigger: threading.Event,
         refresh_interval: float,
+        file_limit: int | None,
         exclude_files_globex: typing.List[str] | None,
         exception_callback: typing.Callable | None = None,
         notification_callback: typing.Callable | None = None,
@@ -440,6 +459,8 @@ class FullFileThreadLauncher(FileThreadLauncher):
             monitor loops
         refresh_interval : float
             how often to check for new files
+        file_limit : int, optional
+            place a limit on the number of files that can be monitored
         exclude_files_globex : typing.List[str] | None
             a list of globular expressions for files to exclude
         exception_callback : typing.Callable | None, optional
@@ -462,6 +483,7 @@ class FullFileThreadLauncher(FileThreadLauncher):
             parsing_callback=mp_parse.record_file,
             refresh_interval=refresh_interval,
             trackables=trackables,
+            file_limit=file_limit,
             notification_callback=notification_callback
             or (lambda item: loguru.logger.info(f"Found NEW file '{item}'")),
             exclude_files_globex=exclude_files_globex,
