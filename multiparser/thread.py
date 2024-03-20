@@ -8,6 +8,7 @@ which are files requiring only the read of the latest line, and full files
 which are defined as those requiring the whole file to be re-read on modification
 
 """
+
 __date__ = "2023-10-16"
 __author__ = "Kristian Zarebski"
 __maintainer__ = "Kristian Zarebski"
@@ -18,6 +19,7 @@ import datetime
 import functools
 import glob
 import os.path
+import re
 import threading
 import time
 import typing
@@ -27,10 +29,18 @@ import loguru
 import multiparser.exceptions as mp_exc
 import multiparser.parsing as mp_parse
 from multiparser.typing import (
+    CallbackType,
+    ExceptionCallback,
+    FullFileParsingCallback,
     FullFileTrackable,
+    LogFileParsingCallback,
     LogFileTrackable,
-    Trackable,
+    MessageCallback,
+    ParserFunction,
+    PerThreadCallback,
     TrackableList,
+    TrackableType,
+    TimeStampedData,
 )
 
 
@@ -42,12 +52,12 @@ def handle_monitor_thread_exception(function: typing.Callable) -> typing.Callabl
 
     Parameters
     ----------
-    function : typing.Callable
+    function : Callable
         the class method to trigger thread termination on failure
 
     Returns
     -------
-    typing.Callable
+    Callable
         modified method
     """
 
@@ -64,7 +74,128 @@ def handle_monitor_thread_exception(function: typing.Callable) -> typing.Callabl
     return _wrapper
 
 
-class FileThreadLauncher:
+@typing.no_type_check
+def _prepare_parsed_data(
+    parsed_data: TimeStampedData,
+) -> typing.Generator[tuple[dict[str, typing.Any], dict[str, typing.Any]], None, None]:
+    # Some parsers return multiple results, e.g. those parsing multiple file lines
+    if (
+        isinstance(parsed_data, tuple)
+        and len(parsed_data) == 2
+        and isinstance(parsed_data[0], dict)
+        and isinstance(parsed_data[1], list)
+    ):
+        if not parsed_data[1]:
+            return []
+        if isinstance(parsed_data[1][0], dict):
+            _metadata, _data = parsed_data
+            return ((_metadata, d) for d in _data)
+    elif (
+        isinstance(parsed_data, tuple)
+        and len(parsed_data) == 2
+        and isinstance(parsed_data[0], dict)
+        and isinstance(parsed_data[1], dict)
+    ):
+        yield parsed_data
+        return
+    raise RuntimeError(f"Parsing returned invalid data form:\n '{parsed_data}'")
+
+
+def _reparse_action(
+    file_name: str,
+    file_type: str | None,
+    cached_metadata: dict[str, typing.Any],
+    modified_time: str,
+    tracked_vals: list[TrackableType],
+    parsing_callback: LogFileParsingCallback | FullFileParsingCallback,
+    cstm_parser: ParserFunction | None,
+    lock: typing.Any | None,
+    monitor_callback: PerThreadCallback,
+    convert: bool,
+    flatten_data: bool,
+    ignore_lines: list[str | re.Pattern[str]] | None,
+    **kwargs,
+) -> dict[str, typing.Any]:
+    """Action called when file has been modified
+
+    This function performs the parse of a file and handles the extracted data,
+    as well as caches any metadata obtained during the parse.
+
+    Parameters
+    ----------
+    file_name : str
+        name of file parsedd
+    file_type : str | None
+        file type if applicable
+    cached_metadata : dict[str, typing.Any]
+        metadata gathered during previous parse of file
+    modified_time : str
+        time stamp of last modified time
+    tracked_vals : list[TrackableType]
+        patterns describing data to capture
+    parsing_callback : LogFileParsingCallback
+        function to execute when parsing file, this also assembles relevant data
+    cstm_parser : ParserFunction | None
+        override the default parser function which retrieves data
+    lock : typing.Any | None
+        thread lock
+    monitor_callback : PerThreadCallback
+        function executed when data is successfully extracted
+    convert : bool
+        whether to convert values from string
+    flatten_data : bool
+        whether to flatten the results to a single level dictionary
+    ignore_lines : list[str  |  re.Pattern[str]] | None
+        patterns for lines to ignore when parsing
+
+    Returns
+    -------
+    dict[str, typing.Any]
+        updated cached metadata
+    """
+
+    # Pass previous cached metadata to the parser in case required
+    _parsed = parsing_callback(
+        file_name,
+        tracked_values=tracked_vals,  # type: ignore
+        parser_func=cstm_parser,
+        convert=convert,
+        ignore_lines=ignore_lines,
+        file_type=file_type,
+        **(cached_metadata | {k: v for k, v in kwargs.items() if v}),
+    )
+
+    if not _parsed:
+        return cached_metadata
+
+    _cached_metadata = cached_metadata
+
+    # If the parser method records a list of dictionaries as data
+    # we need to ensure these are handled in the same way as for parsers
+    # which return only a single data dictionary
+
+    for _meta, _data in _prepare_parsed_data(_parsed):
+        # Keep latest
+        _cached_metadata = _meta
+
+        if not _data:
+            continue
+
+        if flatten_data:
+            _data = mp_parse.flatten_data(_data)
+
+        loguru.logger.debug(f"{file_name}: {modified_time}: Recorded: {_data}")
+
+        if lock:
+            with lock:
+                monitor_callback(_data, _meta)
+        else:
+            monitor_callback(_data, _meta)
+
+    return _cached_metadata
+
+
+class FileThreadLauncher(typing.Generic[CallbackType, TrackableType]):
     """Base class for all file monitor thread launchers.
 
     Spins up threads whenever a new file matching a given set of globular
@@ -74,15 +205,15 @@ class FileThreadLauncher:
     def __init__(
         self,
         file_thread_termination_trigger: threading.Event,
-        parsing_callback: typing.Callable,
-        notification_callback: typing.Callable,
+        parsing_callback: CallbackType,
+        notification_callback: MessageCallback,
         refresh_interval: float,
         trackables: TrackableList,
         file_limit: int | None,
-        exclude_files_globex: typing.List[str] | None,
-        exception_callback: typing.Callable | None = None,
+        exclude_files_globex: list[str] | None,
+        exception_callback: ExceptionCallback | None = None,
         file_thread_lock: typing.Any | None = None,
-        file_list: typing.List[str] | None = None,
+        file_list: list[str] | None = None,
         flatten_data: bool = False,
         abort_on_fail: bool = False,
     ) -> None:
@@ -93,24 +224,24 @@ class FileThreadLauncher:
         file_thread_termination_trigger : threading.Event
             threading event which when set will trigger termination of all file
             monitor loops
-        parsing_callback : typing.Callable
-            function to be called to parse the monitored files
-        notification_callback : typing.Callable
+        parsing_callback : ParsingCallback
+            function to be executed when a file section is parsed
+        notification_callback : Callable[[str], None]
             function called to notify when a new file is detected
         refresh_interval : float
             how often to check for new files
-        trackables : typing.List[LogFileTrackable  |  FullFileTrackable]
+        trackables : list[LogFileTrackable  |  FullFileTrackable]
             a tuple containing:
                 - globular expression for file capture
                 - regular_expressions for variable tracking within files
                 - whether the file is static (written once) or changing
         file_limit : int, optional
             place a limit on the number of files that can be monitored
-        exclude_files_globex : typing.List[str] | None
+        exclude_files_globex : list[str] | None
             a list of globular expressions for files to exclude
-        exception_callback : typing.Callable | None, optional
+        exception_callback : Callable[[str], None] | None, optional
             function to call when an exception is thrown
-        file_list : typing.List[str] | None, optional
+        file_list : list[str] | None, optional
             container to append any found file names, by default None
         file_thread_lock : threading.Lock, optional
             shared mutex to prevent the callback being called simultaneously by
@@ -121,23 +252,23 @@ class FileThreadLauncher:
             whether to terminate all file threads if one fails
         """
         self._trackables: TrackableList = trackables
-        self._exception_callback: typing.Callable | None = exception_callback
+        self._exception_callback: ExceptionCallback | None = exception_callback
         self._terminate_on_file_thread_fail: bool = abort_on_fail
         self._lock: typing.Any | None = file_thread_lock
         self._termination_trigger: threading.Event = file_thread_termination_trigger
-        self._parsing_callback: typing.Callable = parsing_callback
-        self._notifier: typing.Callable = notification_callback
-        self._file_threads: typing.Dict[str, threading.Thread] = {}
-        self._exclude_globex: typing.List[str] | None = exclude_files_globex
-        self._records: typing.List[typing.Tuple[str, str]] = []
+        self._parsing_callback: CallbackType = parsing_callback
+        self._notifier: MessageCallback = notification_callback
+        self._file_threads: dict[str, threading.Thread] = {}
+        self._exclude_globex: list[str] | None = exclude_files_globex
+        self._records: list[tuple[str, str]] = []
         self._interval = refresh_interval
         self._monitored_files = file_list if file_list is not None else []
         self._flatten_data = flatten_data
-        self._exceptions: typing.Dict[str, Exception | None] = {}
+        self._exceptions: dict[str, Exception | None] = {}
         self._file_limit: int | None = file_limit
 
     @property
-    def exceptions(self) -> typing.Dict[str, Exception | None]:
+    def exceptions(self) -> dict[str, Exception | None]:
         return self._exceptions
 
     @property
@@ -149,13 +280,13 @@ class FileThreadLauncher:
         self,
         file_name: str,
         flatten_data: bool,
-        tracked_values: Trackable,
-        callback: typing.Callable,
+        tracked_values: list[TrackableType],
+        callback: PerThreadCallback,
         static: bool = False,
-        parser_func: typing.Callable | None = None,
-        parser_kwargs: typing.Dict | None = None,
+        parser_func: ParserFunction | None = None,
+        parser_kwargs: dict | None = None,
         convert: bool = True,
-        ignore_lines: typing.List[typing.Pattern | str] | None = None,
+        ignore_lines: list[re.Pattern[str] | str] | None = None,
         file_type: str | None = None,
         **_,
     ) -> None:
@@ -167,40 +298,48 @@ class FileThreadLauncher:
             name of the file to observe
         tracked_values : Trackable
             values to monitor within the given file
+        callback : Callable[[dict[str, Any], dict[str, Any]], None]
+            callback to be executed whenever a result is parsed
         static : bool, optional
             whether the file is written only once, by default False
-        parser_func : typing.Callable | None, optional
+        parser_func : Callable[
+            [str, dict[str, typing.Any]], tuple[dict[str, typing.Any], dict[str, typing.Any]]
+        ] | None, optional
             use a user defined parser instead
         convert : bool, optional
             convert values from string to numeric where appropriate
+        ignore_lines : list[Pattern | str] | None, optional
+            lines to skip during parsing
+        file_type : str, optional
+            suffix/type of file to parse
         """
 
         def _thread_exception_callback(
             exception: Exception,
             target_file: str = file_name,
-            exceptions: typing.Dict[str, Exception | None] = self._exceptions,
+            exceptions: dict[str, Exception | None] = self._exceptions,
         ) -> None:
             exceptions[target_file] = exception
 
-        def _read_action(
-            records: typing.List[typing.Tuple[str, str]],
-            monitor_callback: typing.Callable = callback,
+        def _read_loop(
+            records: list[tuple[str, str]],
             exception_callback=_thread_exception_callback,
+            monitor_callback: PerThreadCallback = callback,
+            parsing_callback: CallbackType = self._parsing_callback,
+            cstm_parser: ParserFunction | None = parser_func,
             file_name: str = file_name,
+            ignore_lines: list[re.Pattern[str] | str] | None = ignore_lines,
+            tracked_vals: list[TrackableType] = tracked_values,
             termination_trigger: threading.Event = self._termination_trigger,
             interval: float = self._interval,
-            tracked_vals: Trackable = tracked_values,
-            lock: typing.Any | None = self._lock,
             static_read: bool = static,
-            cstm_parser: typing.Callable | None = parser_func,
-            convert: bool = convert,
-            ignore_lines: typing.List[str | typing.Pattern] | None = ignore_lines,
-            kwargs: typing.Dict = parser_kwargs or {},
             flatten_data: bool = flatten_data,
+            convert: bool = convert,
+            kwargs: dict = parser_kwargs or {},
         ) -> None:
             """Thread target function for parsing of detected file"""
 
-            _cached_metadata: typing.Dict[str, str | int] = {}
+            _cached_metadata: dict[str, typing.Any] = {}
 
             try:
                 while not termination_trigger.is_set():
@@ -219,52 +358,22 @@ class FileThreadLauncher:
                     if (_modified_time, file_name) in records:
                         continue
 
-                    # Pass previous cached metadata to the parser in case required
-                    _parsed = self._parsing_callback(
-                        file_name,
-                        tracked_vals,
-                        parser_func=cstm_parser,
-                        convert=convert,
-                        ignore_lines=ignore_lines,
+                    _cached_metadata = _reparse_action(
                         file_type=file_type,
-                        **(_cached_metadata | {k: v for k, v in kwargs.items() if v}),
+                        file_name=file_name,
+                        records=records,
+                        cstm_parser=cstm_parser,
+                        monitor_callback=monitor_callback,
+                        parsing_callback=parsing_callback,
+                        tracked_vals=tracked_vals,
+                        ignore_lines=ignore_lines,
+                        lock=self._lock,
+                        flatten_data=flatten_data,
+                        convert=convert,
+                        cached_metadata=_cached_metadata,
+                        modified_time=_modified_time,
+                        **kwargs,
                     )
-
-                    # Some parsers return multiple results, e.g. those parsing multiple file lines
-                    _parsed_list = (
-                        [_parsed] if not isinstance(_parsed, list) else _parsed
-                    )
-                    _flattened_list = []
-
-                    # If the parser method records a list of dictionaries as data
-                    # we need to ensure these are handled in the same way as for parsers
-                    # which return only a single data dictionary
-                    for _meta, _entry in _parsed_list:
-                        if isinstance(_entry, (list, tuple, set)) and _entry:
-                            for section in _entry:
-                                _flattened_list.append((_meta, section))
-                        else:
-                            _flattened_list.append((_meta, _entry))
-
-                    for _meta, _data in _flattened_list:
-                        # Keep latest
-                        _cached_metadata = _meta
-
-                        if not _data:
-                            continue
-
-                        if flatten_data:
-                            _data = mp_parse.flatten_data(_data)
-
-                        loguru.logger.debug(
-                            f"{file_name}: {_modified_time}: Recorded: {_data}"
-                        )
-
-                        if lock:
-                            with lock:
-                                monitor_callback(_data, _meta)
-                        else:
-                            monitor_callback(_data, _meta)
 
                     records.append((_modified_time, file_name))
 
@@ -278,7 +387,7 @@ class FileThreadLauncher:
                 exception_callback(exception=e)
 
         self._file_threads[file_name] = threading.Thread(
-            target=_read_action,
+            target=_read_loop,
             args=(self._records,),
         )
 
@@ -290,13 +399,13 @@ class FileThreadLauncher:
                 break
 
             time.sleep(self._interval)
-            _excludes: typing.List[str] = []
+            _excludes: list[str] = []
             for expr in self._exclude_globex or []:
                 _excludes += glob.glob(expr)
             for trackable in self._trackables:
                 # Check for multiple tracking entries for the same file
                 # not allowed due to constraint of one thread spawned per file
-                _registered_files: typing.List[str] = []
+                _registered_files: list[str] = []
                 if not isinstance((_glob_str := trackable["glob_expr"]), str):
                     raise AssertionError(
                         f"Expected type AnyStr for globular expression but got '{_glob_str}'"
@@ -351,7 +460,9 @@ class FileThreadLauncher:
             )
 
 
-class LogFileThreadLauncher(FileThreadLauncher):
+class LogFileThreadLauncher(
+    FileThreadLauncher[LogFileParsingCallback, tuple[str | None, re.Pattern[str]]]
+):
     """Create a file thread launcher for tailing files.
 
     This class focuses on the monitoring of log files whereby only
@@ -360,14 +471,14 @@ class LogFileThreadLauncher(FileThreadLauncher):
 
     def __init__(
         self,
-        trackables: typing.List[LogFileTrackable],
+        trackables: list[LogFileTrackable],
         file_thread_termination_trigger: threading.Event,
         refresh_interval: float,
         file_limit: int | None,
-        exclude_files_globex: typing.List[str] | None,
-        exception_callback: typing.Callable | None = None,
-        notification_callback: typing.Callable | None = None,
-        file_list: typing.List[str] | None = None,
+        exclude_files_globex: list[str] | None,
+        exception_callback: ExceptionCallback | None = None,
+        notification_callback: MessageCallback | None = None,
+        file_list: list[str] | None = None,
         file_thread_lock: typing.Any | None = None,
         flatten_data: bool = False,
         abort_on_fail: bool = False,
@@ -376,7 +487,7 @@ class LogFileThreadLauncher(FileThreadLauncher):
 
         Parameters
         ----------
-        trackables : typing.List[LogFileTrackable]
+        trackables : list[LogFileTrackable]
             list of tuples containing:
                 - globular expressions of files to monitor
                 - regex defining the variables to track
@@ -388,14 +499,14 @@ class LogFileThreadLauncher(FileThreadLauncher):
             how often to check for new files
         file_limit : int, optional
             place a limit on the number of files that can be monitored
-        exclude_files_globex : typing.List[str] | None
+        exclude_files_globex : list[str] | None
             a list of globular expressions for files to exclude
-        exception_callback : typing.Callable | None, optional
+        exception_callback : Callable[[str], None] | None, optional
             function to call when an exception is thrown
-        notification_callback : typing.Callable | None, optional
+        notification_callback : Callable[[str], None] | None, optional
             function called to notify when a new file is detected.
             Default is a print statement.
-        file_list : typing.List[str] | None, optional
+        file_list : list[str] | None, optional
             container to append any found file names, by default None
         file_thread_lock : threading.Lock, optional
             shared mutex to prevent the callback being called simultaneously by
@@ -407,7 +518,7 @@ class LogFileThreadLauncher(FileThreadLauncher):
         """
 
         super().__init__(
-            parsing_callback=mp_parse.record_log,
+            parsing_callback=mp_parse.record_log,  # type: ignore
             refresh_interval=refresh_interval,
             file_thread_lock=file_thread_lock,
             trackables=trackables,
@@ -423,7 +534,9 @@ class LogFileThreadLauncher(FileThreadLauncher):
         )
 
 
-class FullFileThreadLauncher(FileThreadLauncher):
+class FullFileThreadLauncher(
+    FileThreadLauncher[FullFileParsingCallback, re.Pattern[str] | str]
+):
     """Create a file thread launcher for full files.
 
     This class focuses on the monitoring of full files whereby the
@@ -432,14 +545,14 @@ class FullFileThreadLauncher(FileThreadLauncher):
 
     def __init__(
         self,
-        trackables: typing.List[FullFileTrackable],
+        trackables: list[FullFileTrackable],
         file_thread_termination_trigger: threading.Event,
         refresh_interval: float,
         file_limit: int | None,
-        exclude_files_globex: typing.List[str] | None,
-        exception_callback: typing.Callable | None = None,
-        notification_callback: typing.Callable | None = None,
-        file_list: typing.List[str] | None = None,
+        exclude_files_globex: list[str] | None,
+        exception_callback: ExceptionCallback | None = None,
+        notification_callback: MessageCallback | None = None,
+        file_list: list[str] | None = None,
         file_thread_lock: "threading.Lock | None" = None,
         flatten_data: bool = False,
         abort_on_fail: bool = False,
@@ -448,7 +561,7 @@ class FullFileThreadLauncher(FileThreadLauncher):
 
         Parameters
         ----------
-        trackables : typing.List[FullFileTrackable]
+        trackables : list[FullFileTrackable]
             Dictionary containing:
                 - globular expressions of files to monitor
                 - regex defining the variables to track
@@ -461,14 +574,14 @@ class FullFileThreadLauncher(FileThreadLauncher):
             how often to check for new files
         file_limit : int, optional
             place a limit on the number of files that can be monitored
-        exclude_files_globex : typing.List[str] | None
+        exclude_files_globex : list[str] | None
             a list of globular expressions for files to exclude
-        exception_callback : typing.Callable | None, optional
+        exception_callback : Callable[[str], None] | None, optional
             function to call when an exception is thrown
-        notification_callback : typing.Callable | None, optional
+        notification_callback : Callable[[str], None] | None, optional
             function called to notify when a new file is detected.
             Default is a print statement.
-        file_list : typing.List[str] | None, optional
+        file_list : list[str] | None, optional
             container to append any found file names, by default None
         file_thread_lock : threading.Lock, optional
             shared mutex to prevent the callback being called simultaneously by
@@ -480,7 +593,7 @@ class FullFileThreadLauncher(FileThreadLauncher):
         """
 
         super().__init__(
-            parsing_callback=mp_parse.record_file,
+            parsing_callback=mp_parse.record_file,  # type: ignore
             refresh_interval=refresh_interval,
             trackables=trackables,
             file_limit=file_limit,

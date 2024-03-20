@@ -2,7 +2,6 @@ import re
 import string
 import tempfile
 import time
-import typing
 import os.path
 import importlib.util
 
@@ -25,7 +24,7 @@ def test_parse_f90nml() -> None:
     with tempfile.TemporaryDirectory() as temp_d:
         _data_file = fake_nml(temp_d)
         _meta, _data = record_fortran_nml(input_file=_data_file)
-        _, _data2 = mp_parse.record_file(_data_file, None, None, None)
+        _, _data2 = mp_parse.record_file(_data_file)
         assert "timestamp" in _meta
         assert list(sorted(_data.items())) == sorted(_data2.items())
 
@@ -35,7 +34,7 @@ def test_parse_csv() -> None:
     with tempfile.TemporaryDirectory() as temp_d:
         _data_file = fake_csv(temp_d)
         _meta, _data = file_record_csv(input_file=_data_file)
-        _, _data2 = mp_parse.record_file(_data_file, None, None, None)
+        _, _data2 = mp_parse.record_file(_data_file)
         assert "timestamp" in _meta
         assert sorted([i.items() for i in _data]) == sorted([i.items() for i in _data2])
 
@@ -57,7 +56,7 @@ def test_parse_toml() -> None:
     with tempfile.TemporaryDirectory() as temp_d:
         _data_file = fake_toml(temp_d)
         _meta, _data = record_toml(input_file=_data_file)
-        _, _data2 = mp_parse.record_file(_data_file, None, None, None)
+        _, _data2 = mp_parse.record_file(_data_file)
         assert "timestamp" in _meta
         assert list(sorted(_data.items())) == sorted(_data2.items())
 
@@ -164,7 +163,9 @@ def test_parse_delimited(fake_delimited_log, request, header) -> None:
             delimiter=expected_output[0][0],
             headers=header
         )
-        _collected += [i[1].values() for i in _parsed_data]
+
+        if _parsed_data:
+            _collected += _parsed_data[1]
 
     assert all(i in _collected for i in _all)
 
@@ -199,6 +200,8 @@ def test_tail_csv(fake_delimited_log, header) -> None:
             parser_func=log_record_csv,
             headers=header
         )
-        _collected += [i[1].values() for i in _parsed_data]
+
+        if _parsed_data:
+            _collected += _parsed_data[1]
 
     assert all(i in _collected for i in _all)
