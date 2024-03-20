@@ -22,7 +22,7 @@ The security check tool [_Bandit_](https://bandit.readthedocs.io/en/latest/) is 
 
 _Multiparser_ contains a dedicated suite of tests created using [Pytest](https://docs.pytest.org/) for checking functionality and behaviour. The repository aims for a test coverage of > 90%.
 
-## Documentation
+### Documentation
 
 To ensure functions, methods and classes are documented appropriately _Multiparser_ follows the Numpy docstring convention. The tool [_Interrogate_](https://pypi.org/project/interrogate/) is used to check docstring coverage.
 
