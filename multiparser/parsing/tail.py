@@ -423,7 +423,7 @@ def _extract_label_value_pair(
             _label = label or _label
         else:
             raise ValueError(
-                f"{type_descriptor} '{tracked_val}' with label assignment must return a single value"
+                f"{type_descriptor} '{tracked_val}' with label assignment must return either a single value or two"
             )
     else:
         if not label:

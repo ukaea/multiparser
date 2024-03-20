@@ -10,6 +10,7 @@ on modification, and full files where the whole file is read and parsed as
 a whole.
 
 """
+
 __date__ = "2023-10-16"
 __author__ = "Kristian Zarebski"
 __maintainer__ = "Kristian Zarebski"
@@ -96,7 +97,7 @@ class FileMonitor:
         timeout : int, optional
             time after which to terminate, default is None
         lock_callback : bool, optional
-            uhether to only allow one thread to execute the callbacks
+            whether to only allow one thread to execute the callbacks
             at a time. Default is True.
         interval : float, optional
             the refresh rate of the file monitors, by default 0.1 seconds
@@ -135,6 +136,10 @@ class FileMonitor:
         self._timer_process: multiprocessing.Process | None = None
         self._flatten_data: bool = flatten_data
         self._thread_limit: int | None = file_limit
+
+        # Used for testing only
+        self._file_thread_exception_test_case: bool = False
+        self._log_thread_exception_test_case: bool = False
 
         _plain_log: str = "{elapsed} | {level: <8} | multiparser | {message}"
         _color_log: str = "{level.icon} | <green>{elapsed}</green>  | <level>{level: <8}</level> | <c>multiparser</c> | {message}"
@@ -194,6 +199,7 @@ class FileMonitor:
                 exception_callback=self._exception_callback,
                 notification_callback=self._notification_callback,
                 flatten_data=flatten_data,
+                test_exception_capture=self._file_thread_exception_test_case,
             )
             _full_file_threads.run()
 
@@ -218,6 +224,7 @@ class FileMonitor:
                 abort_on_fail=self._shutdown_on_thread_failure,
                 notification_callback=self._notification_callback,
                 flatten_data=flatten_data,
+                test_exception_capture=self._log_thread_exception_test_case,
             )
             _log_file_threads.run()
 
@@ -268,9 +275,14 @@ class FileMonitor:
         except Exception as e:
             raise AssertionError(f"Custom parser testing failed with exception:\n{e}")
 
-        if len(_out) != 2:
+        if (
+            len(_out) != 2
+            or not isinstance(_out[0], dict)
+            or not isinstance(_out[1], (list, dict))
+        ):
             raise AssertionError(
                 "Parser function must return two objects, a metadata dictionary and parsed values"
+                " in the form of a dictionary or list of dictionaries"
             )
 
         # Either the parser itself is decorated, or a function it calls to create the parsed data
@@ -486,9 +498,9 @@ class FileMonitor:
             )
 
         if not _tracked_values or parser_func:
-            _reg_lab_expr_pairing: typing.List[
-                typing.Tuple[str | None, typing.Pattern | str]
-            ] | None = None
+            _reg_lab_expr_pairing: (
+                typing.List[typing.Tuple[str | None, typing.Pattern | str]] | None
+            ) = None
         else:
             _labels = _labels or [None] * len(_tracked_values)
             _reg_lab_expr_pairing = [
@@ -587,13 +599,13 @@ class FileMonitor:
     def __exit__(self, *_, **__) -> None:
         """Set termination trigger"""
 
-        if self._timer_process:
+        if self._timer_process and self._timer_process.is_alive():
             self._timer_process.join()
 
-        if self._file_monitor_thread:
+        if self._file_monitor_thread and self._file_monitor_thread.is_alive():
             self._file_monitor_thread.join()
 
-        if self._log_monitor_thread:
+        if self._log_monitor_thread and self._log_monitor_thread.is_alive():
             self._log_monitor_thread.join()
 
         if _mon_thread_exc := self._exceptions.get("__main__"):
