@@ -25,15 +25,43 @@ from multiparser.parsing.tail import record_with_delimiter as tail_record_delimi
 
 
 DATA_LIBRARY: str = os.path.join(os.path.dirname(__file__), "data")
+XEGER_SEED: int = 10
 
+
+@pytest.mark.monitor
+@pytest.mark.parametrize(
+    "fail", (True, False),
+    ids=("fail", "pass")
+)
+def test_globex_check(fail: bool) -> None:
+    if not fail:
+        with multiparser.FileMonitor(
+            lambda *_: None,
+            log_level=logging.INFO,
+            terminate_all_on_fail=True,
+            timeout=2
+        ) as monitor:
+            monitor.track(
+                path_glob_exprs=["files*"]
+            )
+    else:
+        with pytest.raises(AssertionError):
+            with multiparser.FileMonitor(
+            lambda *_: None,
+                log_level=logging.INFO,
+                terminate_all_on_fail=True,
+                timeout=2
+            ) as monitor:
+                monitor.track(
+                    path_glob_exprs=[10]
+                )
 
 @pytest.mark.monitor
 @pytest.mark.parametrize(
     "exception",
     (
         "file_thread_exception",
-        # FIXME: Need to work out why this sometimes hangs when run with other tests
-        #"file_monitor_thread_exception",
+        "file_monitor_thread_exception",
         "log_monitor_thread_exception",
         None,
     ),
@@ -43,13 +71,17 @@ DATA_LIBRARY: str = os.path.join(os.path.dirname(__file__), "data")
     ids=("lock", "no_lock")
 )
 @pytest.mark.parametrize(
+    "flatten", (True, False),
+    ids=("flatten_data", "no_flatten")
+)
+@pytest.mark.parametrize(
     "fake_log", [
         (True, None)
     ],
     indirect=True,
 )
 def test_run_on_directory_all(
-    fake_log, exception: str | None, mocker: pytest_mock.MockerFixture, lock: bool
+    fake_log, exception: str | None, mocker: pytest_mock.MockerFixture, lock: bool, flatten: bool
 ) -> None:
     _interval: float = 0.1
     _fakers: tuple[typing.Callable, ...] = (
@@ -68,19 +100,15 @@ def test_run_on_directory_all(
         for _ in range(8):
             random.choice(_fakers)(temp_d)
 
+        def exception_callback(message: str) -> None:
+            print(f"EXCEPTION: {message}")
+
+        def notify_callback(message: str) -> None:
+            print(f"NOTIFY: {message}")
+
         def per_thread_callback(_, __, exception=exception):
             if exception == "file_thread_exception":
                 raise TypeError("Oh dear!")
-
-        @mp_thread.handle_monitor_thread_exception
-        def fail_run(*_):
-            raise AssertionError("Oh dear!")
-
-        if exception in (
-            "file_monitor_thread_exception",
-            "log_monitor_thread_exception",
-        ):
-            mocker.patch.object(mp_thread.FileThreadLauncher, "run", fail_run)
 
         _allowed_exception = None
 
@@ -93,11 +121,16 @@ def test_run_on_directory_all(
             with pytest.raises(_allowed_exception):
                 with multiparser.FileMonitor(
                     per_thread_callback,
+                    exception_callback=exception_callback,
+                    notification_callback=notify_callback,
                     interval=_interval,
                     log_level=logging.INFO,
                     lock_callbacks=lock,
+                    flatten_data=flatten,
                     terminate_all_on_fail=True
                 ) as monitor:
+                    monitor._file_thread_exception_test_case = exception == "file_monitor_thread_exception"
+                    monitor._log_thread_exception_test_case = exception == "log_monitor_thread_exception"
                     monitor.track(path_glob_exprs=os.path.join(temp_d, "*"))
                     monitor.exclude(os.path.join(temp_d, "*.toml"))
                     monitor.tail(**fake_log)
@@ -246,7 +279,7 @@ def test_custom_data(stage: int, contains: tuple[str, ...]) -> None:
 def test_parse_log_in_blocks() -> None:
     _refresh_interval: float = 0.1
     _expected = [{f"var_{i}": random.random() * 10 for i in range(5)} for _ in range(10)]
-    _xeger = xeger.Xeger()
+    _xeger = xeger.Xeger(seed=XEGER_SEED)
     _file_blocks = []
     _gen_ignore_pattern = r"<!--ignore-this-\w+-\d+-->"
     _gen_rgx = r"\w+: \d+\.\d+"
@@ -327,7 +360,7 @@ def test_parse_log_in_blocks() -> None:
 )
 def test_parse_delimited_in_blocks(delimiter, explicit_headers) -> None:
     _refresh_interval: float = 0.1
-    _xeger = xeger.Xeger()
+    _xeger = xeger.Xeger(seed=XEGER_SEED)
 
     # Cases where user provides the headers, or they are read as first line in file
     if explicit_headers == "headers":
@@ -500,4 +533,74 @@ def test_custom_parser(style: str) -> None:
             _process.start()
             _process.join()
 
-            
+
+@pytest.mark.monitor
+@pytest.mark.parametrize(
+    "parser", ("valid_parser", "not_decorated", "bad_return", "raises_exc")
+)
+def test_custom_log_parser(parser: str) -> None:
+    def _undecorated_custom_log_parser(file_content: str, *_, **__):
+        return {}, {"some_data": 2, "content": file_content}
+    
+    @mp_parse.log_parser
+    def _good_custom_log_parser(file_content: str, *_, **__):
+        return _undecorated_custom_log_parser(file_content)
+    
+    @mp_parse.log_parser
+    def _bad_return_custom_log_parser(file_content: str, *_, **__):
+        return file_content, "oops"
+    
+    @mp_parse.log_parser
+    def _bad_raises_custom_log_parser(file_content: str, *_, **__):
+        raise RuntimeError("Oops")
+    
+    if parser == "valid_parser":
+        with multiparser.FileMonitor(
+            lambda *_: None,
+            log_level=logging.INFO,
+            terminate_all_on_fail=True,
+            timeout=2
+        ) as monitor:
+            monitor.tail(
+                path_glob_exprs=["files*"],
+                parser_func=_good_custom_log_parser
+            )
+    elif parser == "undecorated":
+        with pytest.raises(AssertionError) as e:
+            with multiparser.FileMonitor(
+                lambda *_: None,
+                log_level=logging.INFO,
+                terminate_all_on_fail=True,
+                timeout=2
+            ) as monitor:
+                monitor.tail(
+                    path_glob_exprs=["files*"],
+                    parser_func=_undecorated_custom_log_parser
+                )
+                assert "Parser function must be decorated" in str(e.value)
+    elif parser == "bad_return":
+        with pytest.raises(AssertionError) as e:
+            with multiparser.FileMonitor(
+            lambda *_: None,
+                log_level=logging.INFO,
+                terminate_all_on_fail=True,
+                timeout=2
+            ) as monitor:
+                monitor.tail(
+                path_glob_exprs=["files*"],
+                parser_func=_bad_return_custom_log_parser
+            )
+            assert "Parser function must return two objects, " in str(e.value)
+    else:
+        with pytest.raises(AssertionError) as e:
+            with multiparser.FileMonitor(
+            lambda *_: None,
+                log_level=logging.INFO,
+                terminate_all_on_fail=True,
+                timeout=2
+            ) as monitor:
+                monitor.tail(
+                path_glob_exprs=["files*"],
+                parser_func=_bad_raises_custom_log_parser
+            )
+            assert "Custom parser testing failed with exception" in str(e.value)

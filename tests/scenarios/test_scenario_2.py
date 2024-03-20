@@ -12,12 +12,13 @@ import xeger
 
 import multiparser
 
+XEGER_SEED: int = 23
 
 def run_dummy_analysis(
     output_dir: str, termination_trigger: multiprocessing.synchronize.Event
 ) -> None:   
     """Run dummy analysis where multiple files are written containing data blocks""" 
-    _xeger = xeger.Xeger()
+    _xeger = xeger.Xeger(seed=XEGER_SEED)
     time_step: float = 0.1
     lines_per_file: int = 4
 
