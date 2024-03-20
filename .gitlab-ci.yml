@@ -70,8 +70,8 @@ Docstring Coverage:
     - main
   image: "python:3.10.12-slim-bullseye"
   script:
-    - pip install interrogate -g docstring_coverage.svg
-    - interrogate
+    - pip install interrogate
+    - interrogate -g docstring_coverage.svg
   artifacts:
     paths:
       - docstring_coverage.svg
