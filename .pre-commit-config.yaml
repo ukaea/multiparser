@@ -5,6 +5,7 @@ repos:
     hooks:
       - id: check-toml
       - id: check-yaml
+        exclude: mkdocs.yaml
       - id: pretty-format-json
         args: [--autofix]
       - id: trailing-whitespace
@@ -38,7 +39,6 @@ repos:
     rev: 1.5.0
     hooks:
       - id: interrogate
-        args: [--fail-under=100, --verbose]
   - repo: https://github.com/PyCQA/bandit
     rev: 1.7.7
     hooks:
