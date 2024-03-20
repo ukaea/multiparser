@@ -216,6 +216,7 @@ class FileThreadLauncher(typing.Generic[CallbackType, TrackableType]):
         file_list: list[str] | None = None,
         flatten_data: bool = False,
         abort_on_fail: bool = False,
+        test_exception_capture: bool = False,
     ) -> None:
         """Create a new instance of the file monitor thread launcher.
 
@@ -250,6 +251,9 @@ class FileThreadLauncher(typing.Generic[CallbackType, TrackableType]):
             whether to convert data to a single level dictionary of key-value pairs
         abort_on_fail : bool, optional
             whether to terminate all file threads if one fails
+        test_exception_capture : bool, optional
+            set to exception capture testing mode, this is for testing only
+            throwing a dummy exception of a known form
         """
         self._trackables: TrackableList = trackables
         self._exception_callback: ExceptionCallback | None = exception_callback
@@ -266,6 +270,7 @@ class FileThreadLauncher(typing.Generic[CallbackType, TrackableType]):
         self._flatten_data = flatten_data
         self._exceptions: dict[str, Exception | None] = {}
         self._file_limit: int | None = file_limit
+        self._exception_test: bool = test_exception_capture
 
     @property
     def exceptions(self) -> dict[str, Exception | None]:
@@ -394,6 +399,9 @@ class FileThreadLauncher(typing.Generic[CallbackType, TrackableType]):
     @handle_monitor_thread_exception
     def run(self) -> None:
         """Start the thread launcher"""
+        if self._exception_test:
+            raise AssertionError("TESTING_MODE: Test AssertionError")
+
         while not self._termination_trigger.is_set():
             if self.exceptions and self._terminate_on_file_thread_fail:
                 break
@@ -482,6 +490,7 @@ class LogFileThreadLauncher(
         file_thread_lock: typing.Any | None = None,
         flatten_data: bool = False,
         abort_on_fail: bool = False,
+        test_exception_capture: bool = False,
     ) -> None:
         """Initialise a log file monitor thread launcher.
 
@@ -515,6 +524,9 @@ class LogFileThreadLauncher(
             whether to convert data to a single level dictionary of key-value pairs
         abort_on_fail : bool, optional
             whether to terminate all file threads if one fails
+        test_exception_capture : bool, optional
+            set to exception capture testing mode, this is for testing only
+            throwing a dummy exception of a known form
         """
 
         super().__init__(
@@ -531,6 +543,7 @@ class LogFileThreadLauncher(
             exception_callback=exception_callback,
             flatten_data=flatten_data,
             abort_on_fail=abort_on_fail,
+            test_exception_capture=test_exception_capture,
         )
 
 
@@ -556,6 +569,7 @@ class FullFileThreadLauncher(
         file_thread_lock: "threading.Lock | None" = None,
         flatten_data: bool = False,
         abort_on_fail: bool = False,
+        test_exception_capture: bool = False,
     ) -> None:
         """Initialise a full file monitor thread launcher.
 
@@ -590,6 +604,9 @@ class FullFileThreadLauncher(
             whether to convert data to a single level dictionary of key-value pairs
         abort_on_fail : bool, optional
             whether to terminate all file threads if one fails
+        test_exception_capture : bool, optional
+            set to exception capture testing mode, this is for testing only
+            throwing a dummy exception of a known form
         """
 
         super().__init__(
@@ -606,4 +623,5 @@ class FullFileThreadLauncher(
             exception_callback=exception_callback,
             flatten_data=flatten_data,
             abort_on_fail=abort_on_fail,
+            test_exception_capture=test_exception_capture,
         )

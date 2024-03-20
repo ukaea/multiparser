@@ -15,6 +15,7 @@ import pytest
 import toml
 import xeger
 
+XEGER_SEED: int = 0
 DATA_DIR: str = os.path.join(os.path.dirname(__file__), "data")
 
 
@@ -106,7 +107,7 @@ def fake_delimited_log(request) -> (
 ):
     _delimiter, _suffix = request.param
 
-    _regex_gen = xeger.Xeger(limit=10)
+    _regex_gen = xeger.Xeger(limit=10, seed=XEGER_SEED)
 
     _gen_regex = r"\d+\.\d+"
 
@@ -146,7 +147,7 @@ def fake_log(request) -> (
         _rand_regex_1 = r"\w+_\w+_\d+=(\d+)"
         _rand_regex_2 = r"test_\w+=(\'\w+\')"
 
-    _regex_gen = xeger.Xeger(limit=10)
+    _regex_gen = xeger.Xeger(limit=10, seed=XEGER_SEED)
 
     def _write_dummy_data(file_name: str) -> None:
         for _ in range(5):
