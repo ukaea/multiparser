@@ -10,6 +10,7 @@ on modification, and full files where the whole file is read and parsed as
 a whole.
 
 """
+
 __date__ = "2023-10-16"
 __author__ = "Kristian Zarebski"
 __maintainer__ = "Kristian Zarebski"
@@ -32,18 +33,32 @@ import loguru
 
 import multiparser.exceptions as mp_exc
 import multiparser.thread as mp_thread
-from multiparser.typing import FullFileTrackable, LogFileTrackable, TrackedValues
+from multiparser.typing import (
+    ExceptionCallback,
+    FullFileTrackable,
+    LogFileTrackable,
+    MessageCallback,
+    ParserFunction,
+    PerThreadCallback,
+    TrackedValues,
+)
 
 __all__ = ["FileMonitor"]
 
 
-def _default_callback(
-    _: typing.Dict[str, typing.Any], meta: typing.Dict[str, typing.Any]
-) -> None:
+def _default_callback(_: dict[str, typing.Any], meta: dict[str, typing.Any]) -> None:
     """Default per file callback if none set globally or per file"""
     loguru.logger.warning(
         f"Changes detected but no callback set for {meta['file_name']}."
     )
+
+
+def _check_log_globex(trackables: list[LogFileTrackable]) -> None:
+    """Check globular expressions before passing them to thread"""
+    for expression in trackables:
+        if not isinstance(_glob_ex := expression["glob_expr"], str):
+            raise AssertionError("Globular expression must be of type AnyStr")
+        glob.glob(_glob_ex)
 
 
 class FileMonitor:
@@ -63,11 +78,11 @@ class FileMonitor:
 
     def __init__(
         self,
-        per_thread_callback: typing.Callable | None = None,
-        exception_callback: typing.Callable | None = None,
-        notification_callback: typing.Callable | None = None,
+        per_thread_callback: PerThreadCallback | None = None,
+        exception_callback: MessageCallback | None = None,
+        notification_callback: MessageCallback | None = None,
         termination_trigger: Event | None = None,
-        subprocess_triggers: typing.List[Event] | None = None,
+        subprocess_triggers: list[Event] | None = None,
         timeout: int | None = None,
         lock_callbacks: bool = True,
         interval: float = 0.1,
@@ -81,17 +96,17 @@ class FileMonitor:
 
         Parameters
         ----------
-        threads_recorder : typing.Dict
+        threads_recorder : dict
             Dictionary for caching values read from the file parsing threads
-        per_thread_callback : typing.Callable, optional
+        per_thread_callback : Callable[[dict[str, Any], dict[str, Any]], None], optional
             function to be executed whenever a monitored file is modified
             this will apply globally to all files unless overwritten
-        exception_callback : typing.Callable | None, optional
+        exception_callback : Callable[[str], None] | None, optional
             function to be executed when an exception is thrown
-        notification_callback : typing.Callable | None, optional
+        notification_callback : Callable[[str], None] | None, optional
             function to be called when a new file is found, default is
             a print statement
-        subprocess_triggers : typing.List[Event], optional
+        subprocess_triggers : list[Event], optional
             if provided, events which will be set if monitor terminates
         timeout : int, optional
             time after which to terminate, default is None
@@ -117,19 +132,19 @@ class FileMonitor:
         self._per_thread_callback = per_thread_callback or _default_callback
         self._notification_callback = notification_callback
         self._shutdown_on_thread_failure: bool = terminate_all_on_fail
-        self._exceptions: typing.Dict[str, Exception | None] = {}
+        self._exceptions: dict[str, Exception | None] = {}
         self._exception_callback = self._generate_exception_callback(exception_callback)
         self._file_threads_mutex: "threading.Lock | None" = (
             threading.Lock() if lock_callbacks else None
         )
-        self._subprocess_triggers: typing.List[Event] | None = subprocess_triggers
+        self._subprocess_triggers: list[Event] | None = subprocess_triggers
         self._monitor_termination_trigger = (
             termination_trigger or multiprocessing.Event()
         )
-        self._known_files: typing.List[str] = []
-        self._file_trackables: typing.List[FullFileTrackable] = []
-        self._log_trackables: typing.List[LogFileTrackable] = []
-        self._excluded_patterns: typing.List[str] = []
+        self._known_files: list[str] = []
+        self._file_trackables: list[FullFileTrackable] = []
+        self._log_trackables: list[LogFileTrackable] = []
+        self._excluded_patterns: list[str] = []
         self._file_monitor_thread: threading.Thread | None = None
         self._log_monitor_thread: threading.Thread | None = None
         self._timer_process: multiprocessing.Process | None = None
@@ -147,8 +162,8 @@ class FileMonitor:
         )
 
     def _generate_exception_callback(
-        self, user_callback: typing.Callable | None
-    ) -> typing.Callable:
+        self, user_callback: MessageCallback | None
+    ) -> ExceptionCallback | None:
         def _exception_callback(
             exception: Exception,
             _exceptions: dict[str, Exception | None] = self._exceptions,
@@ -174,9 +189,9 @@ class FileMonitor:
         """Create threads for the log file and full file monitors"""
 
         def _full_file_monitor_func(
-            ff_trackables: typing.List[FullFileTrackable],
-            exc_glob_exprs: typing.List[str],
-            file_list: typing.List[str],
+            ff_trackables: list[FullFileTrackable],
+            exc_glob_exprs: list[str],
+            file_list: list[str],
             termination_trigger: threading.Event,
             interval: float,
             flatten_data: bool,
@@ -198,9 +213,9 @@ class FileMonitor:
             _full_file_threads.run()
 
         def _log_file_monitor_func(
-            lf_trackables: typing.List[LogFileTrackable],
-            exc_glob_exprs: typing.List[str],
-            file_list: typing.List[str],
+            lf_trackables: list[LogFileTrackable],
+            exc_glob_exprs: list[str],
+            file_list: list[str],
             termination_trigger: threading.Event,
             interval: float,
             flatten_data: bool,
@@ -245,9 +260,7 @@ class FileMonitor:
             ),
         )
 
-    def _check_custom_log_parser(
-        self, parser: typing.Callable, **parser_kwargs
-    ) -> None:
+    def _check_custom_log_parser(self, parser: ParserFunction, **parser_kwargs) -> None:
         """Verifies the parser works correctly before launching threads"""
         if hasattr(parser, "__skip_validation"):
             return
@@ -280,12 +293,12 @@ class FileMonitor:
                 "Parser function must be decorated using the multiparser.log_parser decorator"
             )
 
-    def exclude(self, path_glob_exprs: typing.List[str] | str) -> None:
+    def exclude(self, path_glob_exprs: list[str] | str) -> None:
         """Exclude a set of files from monitoring.
 
         Parameters
         ----------
-        path_glob_exprs : typing.List[str] | str
+        path_glob_exprs : list[str] | str
             a list or string defining globular expressions for files
             to exclude from tracking
         """
@@ -301,11 +314,11 @@ class FileMonitor:
     def track(
         self,
         *,
-        path_glob_exprs: typing.List[str] | str,
+        path_glob_exprs: list[str] | str,
         tracked_values: TrackedValues | None = None,
-        callback: typing.Callable | None = None,
-        parser_func: typing.Callable | None = None,
-        parser_kwargs: typing.Dict | None = None,
+        callback: PerThreadCallback | None = None,
+        parser_func: ParserFunction | None = None,
+        parser_kwargs: dict[str, typing.Any] | None = None,
         static: bool = False,
         file_type: str | None = None,
     ) -> None:
@@ -318,17 +331,17 @@ class FileMonitor:
 
         Parameters
         ----------
-        path_glob_exprs : typing.List[str] | str
+        path_glob_exprs : list[str] | str
             set of or single globular expression(s) defining files
             to monitor
-        tracked_values : typing.List[str] | None, optional
+        tracked_values : list[str] | None, optional
             a list of regular expressions defining variables to track
             within the file, by default None
-        callback : typing.Callable | None, optional
+        callback : Callable[[dict[str, Any], dict[str, Any]], None] | None, optional
             override the global per file callback for this instance
-        parser_func : typing.Callable | None, optional
+        parser_func : Callable[[str, ...], tuple[dict[str, Any], dict[str, Any]]] | None, optional
             provide a custom parsing function
-        parser_kwargs : typing.Dict | None, optional
+        parser_kwargs : dict | None, optional
             arguments to include when running the specified custom parser
         static : bool, optional
             (if known) whether the given file(s) are written only once
@@ -338,7 +351,7 @@ class FileMonitor:
             recognition with a recognised parser e.g. 'yaml'
         """
         if isinstance(path_glob_exprs, str):
-            _parsing_dict: typing.Dict[str, typing.Any] = {
+            _parsing_dict: dict[str, typing.Any] = {
                 "glob_expr": path_glob_exprs,
                 "tracked_values": tracked_values,
                 "static": static,
@@ -371,15 +384,15 @@ class FileMonitor:
     def tail(
         self,
         *,
-        path_glob_exprs: typing.List[str] | str,
+        path_glob_exprs: list[str] | str,
         tracked_values: TrackedValues | None = None,
-        skip_lines_w_pattern: typing.List[typing.Pattern | str] | None = None,
-        labels: str | typing.List[str | None] | None = None,
-        callback: typing.Callable | None = None,
-        parser_func: typing.Callable | None = None,
-        parser_kwargs: typing.Dict | None = None,
+        skip_lines_w_pattern: list[re.Pattern[str] | str] | None = None,
+        labels: str | list[str | None] | None = None,
+        callback: PerThreadCallback | None = None,
+        parser_func: ParserFunction | None = None,
+        parser_kwargs: dict | None = None,
     ) -> None:
-        """Tail a set of files.
+        r"""Tail a set of files.
 
         Tailing a file means reading the last line of that file,
         the file(s) in question should be read line by line, e.g.
@@ -427,25 +440,25 @@ class FileMonitor:
 
         Parameters
         ----------
-        path_glob_exprs : typing.List[str] | str
+        path_glob_exprs : list[str] | str
             set of or single globular expression(s) defining files
             to monitor
-        tracked_values : typing.List[Pattern | str], optional
+        tracked_values : list[Pattern | str], optional
             a set of regular expressions or strings defining variables to track.
             Where one capture group is defined the user must provide
             an associative label. Where two are defined, the first capture
             group is taken to be the label, the second the value.
-        skip_lines_w_pattern : typing.List[Pattern | str], optional
+        skip_lines_w_pattern : list[Pattern | str], optional
             specify patterns defining lines which should be skipped
-        labels : typing.List[str], optional
+        labels : list[str], optional
             define the label to assign to each value, if an element in the
             list is None, then a capture group is used. If labels itself is
             None, it is assumed all matches have a label capture group.
-        callback : typing.Callable | None, optional
+        callback : Callable[[dict[str, Any], dict[str, Any]], None] | None, optional
             override the global per file callback for this instance
-        parser_func : typing.Callable | None, optional
+        parser_func : Callable[[str, ...], tuple[dict[str, Any], dict[str, Any]]] | None, optional
             provide a custom parsing function
-        parser_kwargs : typing.Dict | None, optional
+        parser_kwargs : dict | None, optional
             arguments to include when running the specified custom parser
         """
         if parser_func:
@@ -463,8 +476,8 @@ class FileMonitor:
                 "method 'tail'"
             )
 
-        _tracked_values: typing.List[str | typing.Pattern]
-        _labels: typing.List[str | None]
+        _tracked_values: list[str | re.Pattern[str]]
+        _labels: list[str | None]
 
         if tracked_values is None:
             _tracked_values = []
@@ -486,9 +499,9 @@ class FileMonitor:
             )
 
         if not _tracked_values or parser_func:
-            _reg_lab_expr_pairing: typing.List[
-                typing.Tuple[str | None, typing.Pattern | str]
-            ] | None = None
+            _reg_lab_expr_pairing: (
+                list[tuple[str | None, re.Pattern[str] | str]] | None
+            ) = None
         else:
             _labels = _labels or [None] * len(_tracked_values)
             _reg_lab_expr_pairing = [
@@ -496,7 +509,7 @@ class FileMonitor:
             ]
 
         if isinstance(path_glob_exprs, (str, re.Pattern)):
-            _parsing_dict: typing.Dict[str, typing.Any] = {
+            _parsing_dict: dict[str, typing.Any] = {
                 "glob_expr": path_glob_exprs,
                 "tracked_values": _reg_lab_expr_pairing,
                 "static": False,
@@ -520,11 +533,7 @@ class FileMonitor:
                 for g in path_glob_exprs
             ]
 
-        # Check globular expressions before passing them to thread
-        for expression in self._log_trackables:
-            if not isinstance(_glob_ex := expression["glob_expr"], str):
-                raise AssertionError("Globular expression must be of type AnyStr")
-            glob.glob(_glob_ex)
+        _check_log_globex(self._log_trackables)
 
     @classmethod
     def _spin_timer(cls, duration: int, trigger: Event) -> None:
