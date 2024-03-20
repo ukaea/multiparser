@@ -15,7 +15,7 @@ __date__ = "2023-10-16"
 __author__ = "Kristian Zarebski"
 __maintainer__ = "Kristian Zarebski"
 __email__ = "kristian.zarebski@ukaea.uk"
-__copyright__ = "Copyright 2023, United Kingdom Atomic Energy Authority"
+__copyright__ = "Copyright 2024, United Kingdom Atomic Energy Authority"
 
 import contextlib
 import glob
@@ -175,6 +175,12 @@ class FileMonitor:
             abort_on_fail=self._shutdown_on_thread_failure,
             abort_func=self.terminate,
         ) -> None:
+            """The general exception callback
+
+            Handles the case where the program should abort on exception throws,
+            assembles exception data and also executes the user-defined
+            exception callback.
+            """
             if user_defined:
                 user_defined(f"{type(exception).__name__}: '{exception.args[0]}'")
 
@@ -571,6 +577,7 @@ class FileMonitor:
         self._close_processes()
 
     def _close_processes(self) -> None:
+        """Close all running processes, joining threads"""
         # If for some reason the user calls 'terminate' before run and is not
         # using file monitor as a context manager
         if not self._file_monitor_thread or not self._log_monitor_thread:

@@ -10,7 +10,7 @@ __date__ = "2023-10-16"
 __author__ = "Kristian Zarebski"
 __maintainer__ = "Kristian Zarebski"
 __email__ = "kristian.zarebski@ukaea.uk"
-__copyright__ = "Copyright 2023, United Kingdom Atomic Energy Authority"
+__copyright__ = "Copyright 2024, United Kingdom Atomic Energy Authority"
 
 import re
 import typing
@@ -62,6 +62,8 @@ TrackableType = typing.TypeVar("TrackableType")
 
 
 class FullFileParsingCallback(typing.Protocol):
+    """Protocol for typing of full file parser callback in thread launcher"""
+
     def __call__(
         self,
         input_file: str,
@@ -74,6 +76,8 @@ class FullFileParsingCallback(typing.Protocol):
 
 
 class LogFileParsingCallback(typing.Protocol):
+    """Protocol for typing of log file parser callback in thread launcher"""
+
     def __call__(
         self,
         input_file: str,

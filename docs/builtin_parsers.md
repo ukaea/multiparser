@@ -20,7 +20,3 @@ The module comes with a set of pre-defined parsing functions which can be used w
 \*\* Requires the extra `arrow` to be installed.
 
 These are executed when using "tracking" (see [Tracking and Tailing](tracking_and_tailing.md)) on recognised file types without custom parser specification. Note they assume the data can be loaded as a **single level dictionary**.
-
-## Custom Parsing
-
-To have more of a handle on how and what information is retrieved from the

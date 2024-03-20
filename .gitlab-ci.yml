@@ -45,7 +45,7 @@ Security:
       - tags
 
 
-pylint:
+Linting:
   stage: Testing and Quality
   only:
     - main
@@ -58,6 +58,23 @@ pylint:
     paths:
       - code_quality_report.log
       - code_quality.svg
+    when: always
+    expire_in: 1 hr
+  tags:
+    - ubuntu
+    - lower-privacy
+
+Docstring Coverage:
+  stage: Testing and Quality
+  only:
+    - main
+  image: "python:3.10.12-slim-bullseye"
+  script:
+    - pip install interrogate -g docstring_coverage.svg
+    - interrogate
+  artifacts:
+    paths:
+      - docstring_coverage.svg
     when: always
     expire_in: 1 hr
   tags:
@@ -88,7 +105,7 @@ pages:
   only:
     - docs
   <<: *setup_unit
-  dependencies: ["pylint", "Unit Tests"]
+  dependencies: ["Linting", "Unit Tests", "Docstring Coverage"]
   script:
     - poetry run mkdocs build -d public
     - mkdir -p public/files/media/
@@ -96,6 +113,7 @@ pages:
     - mv htmlcov/* public/
     - mv code_quality_report.log public/files/logs/
     - mv code_quality.svg public/files/media/
+    - mv docstring_coverage.svg public/files/media/
   artifacts:
     when: always
     expire_in: 1 hr

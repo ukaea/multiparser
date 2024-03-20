@@ -65,6 +65,7 @@ pandas-stubs = "^2.2.1.240316"
 types-toml = "^0.10.8.20240310"
 types-pyyaml = "^6.0.12.20240311"
 ruff = "^0.3.3"
+interrogate = "^1.5.0"
 
 [build-system]
 requires = ["poetry-core"]
@@ -84,3 +85,9 @@ markers = [
     "monitor: tests of the file monitor",
     "scenario: tests for scenarios"
 ]
+
+[tool.interrogate]
+ignore-init-method = true
+fail-under = 95
+verbose = 1
+exclude = ["docs", "tests", "multiparser/typing.py"]

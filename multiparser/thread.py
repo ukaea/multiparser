@@ -13,7 +13,7 @@ __date__ = "2023-10-16"
 __author__ = "Kristian Zarebski"
 __maintainer__ = "Kristian Zarebski"
 __email__ = "kristian.zarebski@ukaea.uk"
-__copyright__ = "Copyright 2023, United Kingdom Atomic Energy Authority"
+__copyright__ = "Copyright 2024, United Kingdom Atomic Energy Authority"
 
 import datetime
 import functools
@@ -78,6 +78,34 @@ def handle_monitor_thread_exception(function: typing.Callable) -> typing.Callabl
 def _prepare_parsed_data(
     parsed_data: TimeStampedData,
 ) -> typing.Generator[tuple[dict[str, typing.Any], dict[str, typing.Any]], None, None]:
+    """Prepare data parsed within a log or file parser
+
+    Formats all collected data into the same form and creates a generator
+    for iterating through the results.
+
+    Parameters
+    ----------
+    parsed_data : TimeStampedData
+        data collected by a parser function in any of the forms permitted by
+        TimeStampedData
+
+    Returns
+    -------
+    typing.Generator[tuple[dict[str, typing.Any], dict[str, typing.Any]], None, None]
+        a generator for iterating through all parsed data
+
+    Yields
+    ------
+    Iterator[typing.Generator[tuple[dict[str, typing.Any], dict[str, typing.Any]], None, None]]
+        iterator for accessing data in the standard form where entries are
+        a tuple of a dictionary containing metadata, and a second containing
+        the extracted data itself
+
+    Raises
+    ------
+    RuntimeError
+        if the the data could not be reduced/converted into the desired form
+    """
     # Some parsers return multiple results, e.g. those parsing multiple file lines
     if (
         isinstance(parsed_data, tuple)
@@ -274,10 +302,12 @@ class FileThreadLauncher(typing.Generic[CallbackType, TrackableType]):
 
     @property
     def exceptions(self) -> dict[str, Exception | None]:
+        """Return all raised exceptions as dictionary"""
         return self._exceptions
 
     @property
     def n_running(self) -> int:
+        """Return the number of active threads"""
         return sum(thread.is_alive() for thread in self._file_threads.values())
 
     @handle_monitor_thread_exception
@@ -324,6 +354,7 @@ class FileThreadLauncher(typing.Generic[CallbackType, TrackableType]):
             target_file: str = file_name,
             exceptions: dict[str, Exception | None] = self._exceptions,
         ) -> None:
+            """Callback executed when a thread process raises an exception"""
             exceptions[target_file] = exception
 
         def _read_loop(
@@ -440,6 +471,7 @@ class FileThreadLauncher(typing.Generic[CallbackType, TrackableType]):
         self._raise_exceptions()
 
     def abort_threads(self) -> None:
+        """Terminate all threads"""
         for thread in self._file_threads.values():
             thread.join()
 

@@ -11,7 +11,7 @@ __date__ = "2023-10-16"
 __author__ = "Kristian Zarebski"
 __maintainer__ = "Kristian Zarebski"
 __email__ = "kristian.zarebski@ukaea.uk"
-__copyright__ = "Copyright 2023, United Kingdom Atomic Energy Authority"
+__copyright__ = "Copyright 2024, United Kingdom Atomic Energy Authority"
 
 import contextlib
 import datetime

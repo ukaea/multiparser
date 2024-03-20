@@ -42,6 +42,8 @@ nav:
     - Parsing Types: tracking_and_tailing.md
     - Built-in Parsers: builtin_parsers.md
     - Custom Parsers: custom_parsers.md
+  - Development:
+    - Contributing: development.md
   - Reference:
     - File Monitor:
       - file_monitor.md
