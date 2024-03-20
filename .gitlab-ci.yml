@@ -103,7 +103,7 @@ sonarqube-check:
 pages:
   stage: pages
   only:
-    - docs
+    - main
   <<: *setup_unit
   dependencies: ["Linting", "Unit Tests", "Docstring Coverage"]
   script:
