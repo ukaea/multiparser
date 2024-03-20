@@ -1,22 +1,5 @@
 exclude: '^tests'
 repos:
-  - repo: https://github.com/hakancelikdev/unimport
-    rev: 1.2.1
-    hooks:
-      - id: unimport
-        args:
-          ['--remove', '--check', '--include-star-import']
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-        name: isort (python)
-        args: ["--profile", "black"]
-  - repo: https://github.com/psf/black-pre-commit-mirror
-    rev: 23.12.1
-    hooks:
-      - id: black
-        language_version: python3.12
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
@@ -67,3 +50,10 @@ repos:
     hooks:
     -   id: bandit
         args: [-lll, --recursive, clumper]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.3
+    hooks:
+      - id: ruff
+        args: [ --fix ]
+      - id: ruff-format

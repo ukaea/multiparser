@@ -39,16 +39,20 @@ DATA_LIBRARY: str = os.path.join(os.path.dirname(__file__), "data")
     ),
 )
 @pytest.mark.parametrize(
+    "lock", (True, False),
+    ids=("lock", "no_lock")
+)
+@pytest.mark.parametrize(
     "fake_log", [
         (True, None)
     ],
     indirect=True,
 )
 def test_run_on_directory_all(
-    fake_log, exception: str | None, mocker: pytest_mock.MockerFixture
+    fake_log, exception: str | None, mocker: pytest_mock.MockerFixture, lock: bool
 ) -> None:
     _interval: float = 0.1
-    _fakers: typing.Tuple[typing.Callable, ...] = (
+    _fakers: tuple[typing.Callable, ...] = (
         fake_csv,
         fake_nml,
         fake_toml,
@@ -91,6 +95,7 @@ def test_run_on_directory_all(
                     per_thread_callback,
                     interval=_interval,
                     log_level=logging.INFO,
+                    lock_callbacks=lock,
                     terminate_all_on_fail=True
                 ) as monitor:
                     monitor.track(path_glob_exprs=os.path.join(temp_d, "*"))
@@ -170,13 +175,13 @@ def test_run_on_directory_filtered() -> None:
     [[1, ("matrix", "k", "v_sync", "i(1)", "i(2)")]],
     ids=[f"stage_{i}" for i in range(1, 2)],
 )
-def test_custom_data(stage: int, contains: typing.Tuple[str, ...]) -> None:
+def test_custom_data(stage: int, contains: tuple[str, ...]) -> None:
     _file: str = os.path.join(DATA_LIBRARY, f"custom_output_stage_{stage}.dat")
 
     @mp_parse.file_parser
     def _parser_func(
         input_file: str
-    ) -> typing.Tuple[typing.Dict[str, typing.Any], typing.Dict[str, typing.Any]]:
+    ) -> tuple[dict[str, typing.Any], dict[str, typing.Any]]:
         _get_matrix = r"^[(\d+.\d+) *]{16}$"
         _initial_params_regex = r"^([\w_\(\)]+)\s*=\s*(\d+\.*\d*)$"
         _out_data = {}
@@ -260,7 +265,7 @@ def test_parse_log_in_blocks() -> None:
         for i in _expected
     ]
 
-    def run_simulation(out_file: str, trigger, file_content: typing.List[typing.List[str]]=_file_blocks, interval:float=_refresh_interval) -> None:
+    def run_simulation(out_file: str, trigger, file_content: list[list[str]]=_file_blocks, interval:float=_refresh_interval) -> None:
         for block in file_content:
             time.sleep(interval)
             with open(out_file, "a") as out_f:
@@ -273,13 +278,13 @@ def test_parse_log_in_blocks() -> None:
 
     _counter = Counter()
 
-    def callback_check(data, _, comparison=_expected, counter=_counter) -> None:
+    def callback_check(data, meta, comparison=_expected, counter=_counter) -> None:
         for key, value in data.items():
             assert value == comparison[counter.value][key]
         counter.value += 1
 
     @mp_parse.log_parser
-    def parser_func(file_data: str, **_) -> typing.Tuple[typing.Dict[str, typing.Any], ...]:
+    def parser_func(file_data: str, **_) -> tuple[dict[str, typing.Any], list[dict[str, typing.Any]]]:
         _regex_search_str = r"\s*Data Out\n\s*Result:\ (\d+\.\d+)\n\s*Metric:\ (\d+\.\d+)\n\s*Normalised:\ (\d+\.\d+)\n\s*Accuracy:\ (\d+\.\d+)\n\s*Deviation:\ (\d+\.\d+)"
 
         _parser = re.compile(_regex_search_str, re.MULTILINE)
@@ -360,7 +365,7 @@ def test_parse_delimited_in_blocks(delimiter, explicit_headers) -> None:
 
     _counter = Counter()
 
-    def run_simulation(out_file: str, trigger, file_content: typing.List[typing.List[str]]=_file_blocks, interval:float=_refresh_interval) -> None:
+    def run_simulation(out_file: str, trigger, file_content: list[list[str]]=_file_blocks, interval:float=_refresh_interval) -> None:
         current_line = 0
         while current_line + (n_lines := random.randint(4, 6)) < len(file_content):
             time.sleep(interval)
@@ -452,3 +457,47 @@ def test_timeout_trigger() -> None:
         if _test_passed.value == 1000000:
             raise AssertionError("Test failed due to infinite loop")
         assert _test_passed.value == _timeout
+
+
+@pytest.mark.monitor
+@pytest.mark.parametrize(
+    "style", ("normal", "mixed", "list")
+)
+def test_custom_parser(style: str) -> None:
+    METADATA = {"meta": 2, "demo": "test"}
+    DATA = {"a": 2, "b": 3.2, "c": "test"}
+    @mp_parse.file_parser
+    def _parser_func(__: str, style=style, **_):
+        if style == "normal":
+            return METADATA, DATA
+        elif style == "mixed":
+            return METADATA, 10 * [DATA]
+        else:
+            return 10 * [(METADATA, DATA)]
+        
+    with tempfile.TemporaryDirectory() as temp_d:
+        _timeout: int = 5
+        def dummy_file(out_dir: str=temp_d, timeout: int=_timeout) -> None:
+            with open(os.path.join(out_dir, "test.tst")) as out_f:
+                out_f.write("testing")
+            time.sleep(timeout)
+        with multiparser.FileMonitor(
+            per_thread_callback=lambda *_, **__: (),
+            log_level=logging.DEBUG,
+            timeout=_timeout,
+            terminate_all_on_fail=True
+        ) as monitor:
+            monitor.run()
+            monitor.track(
+                path_glob_exprs=["*.tst"],
+                tracked_values=None,
+                parser_func=_parser_func
+            )
+            _process = multiprocessing.Process(
+                target=dummy_file,
+            )
+
+            _process.start()
+            _process.join()
+
+            

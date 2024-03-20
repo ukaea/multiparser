@@ -7,6 +7,7 @@ file in its entirety or reading the latest written content. The contents are
 sent to a dictionary.
 
 """
+
 __date__ = "2023-10-16"
 __author__ = "Kristian Zarebski"
 __maintainer__ = "Kristian Zarebski"
@@ -21,17 +22,17 @@ from .file import file_parser, record_file  # noqa
 from .tail import log_parser, record_log  # noqa
 
 
-def flatten_data(data: typing.Dict[str, typing.Any]) -> typing.Dict[str, typing.Any]:
+def flatten_data(data: dict[str, typing.Any]) -> dict[str, typing.Any]:
     """Flatten dictionary into a single level of key-value pairs
 
     Parameters
     ----------
-    data : typing.Dict[str, typing.Any]
+    data : dict[str, typing.Any]
         the data to flatten
 
     Returns
     -------
-    typing.Dict[str, typing.Any]
+    dict[str, typing.Any]
         the data as a single level dictionary with '.' used as a delimiter for the
         key addresses
     """

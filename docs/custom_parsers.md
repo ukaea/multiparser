@@ -4,7 +4,10 @@ In the situation where the output files from a process are not processable by an
 
 ## File Parsers
 
-File parsers are used for tracking, they take the path of an identified candidate as an argument, parse the data from that file and return a key-value mapping of the data of interest. To create a custom parser you will need to use the `multiparser.parsing.file.file_parser` decorator. The function should take an argument `file_path` which is the file path, and allow an arbitrary number of additional arguments (`**_`) to be compatible with the decorator. It should return two dictionaries containing relevant metadata (usually left blank), and the parsed information:
+File parsers are used for tracking, they take the path of an identified candidate as an argument, parse the data from that file and return a key-value mapping of the data of interest. To create a custom parser you will need to use the `multiparser.parsing.file.file_parser` decorator. The function should take an argument `file_path` which is the file path, and allow an arbitrary number of additional arguments (`**_`) to be compatible with the decorator. It should return either:
+
+    - Two dictionaries containing relevant metadata (usually left blank), and the parsed information: `{...}, {...}`.
+    - A single dictionary representing the metadata, and a list of dictionaries (for cases where multiple lines are read in a single parse and these should be kept separate): `{...}, [{...}, ...]`
 
 ```python
 from typing import Any
@@ -37,7 +40,10 @@ to the definition and pass them to tracking using the `parser_kwargs` argument.
 
 ## Log Parsers
 
-In the case where the custom parser will be used in file "tailing", that is read only the latest information appended to the file, the `multiparser.parsing.tail.log_parser` decorator is used when defining the function. The function should take an argument `file_content` which is a string containing the latest read content, and allow an arbitrary number of additional arguments (`**_`) to be compatible with the decorator. It should return two dictionaries containing relevant metadata (usually left blank), and the parsed information:
+In the case where the custom parser will be used in file "tailing", that is read only the latest information appended to the file, the `multiparser.parsing.tail.log_parser` decorator is used when defining the function. The function should take an argument `file_content` which is a string containing the latest read content, and allow an arbitrary number of additional arguments (`**_`) to be compatible with the decorator. It should return either:
+
+    - Two dictionaries containing relevant metadata (usually left blank), and the parsed information: `{...}, {...}`.
+    - A single dictionary representing the metadata, and a list of dictionaries (for cases where multiple lines are read in a single parse and these should be kept separate: `{...}, [{...}, ...]`.
 
 ```python
 from typing import Any

@@ -88,7 +88,7 @@ def fake_nml(*_, **__) -> str:
     return _file_name
 
 
-def to_nml(dictionary: typing.Dict[str, typing.Any], file_name: str) -> None:
+def to_nml(dictionary: dict[str, typing.Any], file_name: str) -> None:
     with open(file_name, "w") as out_f:
         out_str = ["&DEMONML"]
         for key, value in dictionary.items():
@@ -101,7 +101,7 @@ def to_nml(dictionary: typing.Dict[str, typing.Any], file_name: str) -> None:
 @pytest.fixture
 def fake_delimited_log(request) -> (
     typing.Generator[
-        typing.Tuple[str, typing.List[typing.Tuple[None, str]]], None, None
+        tuple[str, list[tuple[None, str]]], None, None
     ]
 ):
     _delimiter, _suffix = request.param
@@ -131,7 +131,7 @@ def fake_delimited_log(request) -> (
 @pytest.fixture
 def fake_log(request) -> (
     typing.Generator[
-        typing.Tuple[str, typing.List[typing.Tuple[None, str]]], None, None
+        tuple[str, list[tuple[None, str]]], None, None
     ]
 ):
     _labels, _capture_groups = request.param
