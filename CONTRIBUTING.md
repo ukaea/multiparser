@@ -10,7 +10,21 @@ If reporting a bug, provide as much detail outlining a minimal example and descr
 
 ## :ballot_box_with_check: Quality and Styling
 
+### Linting and Formatting
+
 This repository uses the `ruff` code formatter and linting to ensure consistency in styling. It is recommended that `ruff` be executed prior to committing changes either directly or by setting up git hooks via pre-commit.
+
+### Security
+
+The security check tool [_Bandit_](https://bandit.readthedocs.io/en/latest/) is executed within the continuous integration pipeline to check for the presence of any common security issues within the Python code.
+
+### Testing and Coverage
+
+_Multiparser_ contains a dedicated suite of tests created using [Pytest](https://docs.pytest.org/) for checking functionality and behaviour. The repository aims for a test coverage of > 90%.
+
+## Documentation
+
+To ensure functions, methods and classes are documented appropriately _Multiparser_ follows the Numpy docstring convention. The tool [_Interrogate_](https://pypi.org/project/interrogate/) is used to check docstring coverage.
 
 ## :arrow_right: Creating a Pull Request
 
