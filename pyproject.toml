@@ -22,6 +22,8 @@ keywords = [
     "logging"
 ]
 readme = "README.md"
+
+[tool.poetry.urls]
 documentation = "https://ukaea.github.io/Multiparser/"
 repository = "https://github.com/ukaea/Multiparser"
 issues = "https://github.com/ukaea/Multiparser/issues"
