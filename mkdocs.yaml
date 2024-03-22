@@ -1,4 +1,8 @@
 site_name: "Multiparser: Parallel File Parsing"
+repo_name: GitHub
+repo_url: https://github.com/ukaea/multiparser
+site_description: Documentation for the Multiparser parallel parsing module
+site_url: https://ukaea.github.io/multiparser
 markdown_extensions:
   - admonition
   - md_in_html

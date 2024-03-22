@@ -1,4 +1,4 @@
-# 2024-03-22 [v0.1.0](https://github.com/ukaea/Multiparser/releases/tag/v0.1.0)
+# 2024-03-22 [v1.0.0](https://github.com/ukaea/Multiparser/releases/tag/v1.0.0)
 
 * Added ability for FileMonitor to itself set termination triggers to stop external processes if required.
 * Added exception handling across all threads whereby any errors occurring in a thread are raised either after the monitor is terminated or causing all threads to be aborted.

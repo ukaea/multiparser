@@ -1,5 +1,5 @@
 <center>
-<img src="docs/media/logo.png", width="200">
+<img src="https://github.com/ukaea/Multiparser/blob/main/docs/media/logo.png", width="200">
 </center>
 
 # Multiparser
@@ -50,7 +50,7 @@ with FileMonitor(
 
 ## Documentation
 
-For information on use and functionality please see the [documentation]().
+For information on use and functionality please see the [documentation](https://ukaea.github.io/Multiparser/).
 
 ## Licensing
 
@@ -58,4 +58,8 @@ _Multiparser_ is provided under the MIT license allowing reuse within both open 
 
 ## Contributing
 
-For contributions and development towards improving _Multiparser_ please see the included [CONTRIBUTING.md](./CONTRIBUTING.md) file.
+For contributions and development towards improving _Multiparser_ please see the included [CONTRIBUTING.md](https://github.com/ukaea/Multiparser/blob/main/CONTRIBUTING.md) file.
+
+---
+
+Copyright (c) 2024 UK Atomic Energy Authority

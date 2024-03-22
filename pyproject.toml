@@ -1,12 +1,12 @@
 [tool.poetry]
 name = "ukaea-multiparser"
-version = "0.1.0"
+version = "1.0.0"
 description = "Multiple File Parser for monitoring and processing updates to a given set of output files."
 authors = ["Kristian Zarębski <kristian.zarebski@ukaea.uk>"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "License :: OSI Approved :: MIT",
     "Natural Language :: English",
     "Operating System :: Unix",
     "Programming Language :: Python :: 3",
@@ -27,10 +27,10 @@ packages = [
 readme = "README.md"
 
 [tool.poetry.urls]
-documentation = "https://ukaea.github.io/Multiparser/"
-repository = "https://github.com/ukaea/Multiparser"
-issues = "https://github.com/ukaea/Multiparser/issues"
-changelog = "https://github.com/ukaea/Multiparser/blob/main/CHANGELOG.md"
+Documentation = "https://ukaea.github.io/Multiparser/"
+Repository = "https://github.com/ukaea/Multiparser"
+Issues = "https://github.com/ukaea/Multiparser/issues"
+"Change Log" = "https://github.com/ukaea/Multiparser/blob/main/CHANGELOG.md"
 
 [tool.poetry.dependencies]
 python = "^3.10,<3.13"
