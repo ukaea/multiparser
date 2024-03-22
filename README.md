@@ -11,16 +11,16 @@ For example, in the case where a set of model outputs were written to a set of f
 
 ## Installation
 
-The module is currently in development, to install it run:
+The module is available in PyPi:
 
 ```sh
-pip install <repository>
+pip install ukaea-multiparser
 ```
 
 To install optional extras `arrow` and `fortran` list them during the install, e.g.:
 
 ```sh
-pip install <repository>[fortran,arrow]
+pip install ukaea-multiparser[fortran,arrow]
 ```
 
 ## Example
