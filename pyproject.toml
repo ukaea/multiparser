@@ -36,7 +36,7 @@ fortran = ["f90nml"]
 
 [tool.poetry.group.testing.dependencies]
 pytest = "^7.4.2"
-pytest-sugar = "^0.9.7"
+pytest-sugar = "^1.0.0"
 pytest-cov = "^4.1.0"
 xeger = "^0.4.0"
 pytest-mock = "^3.11.1"
