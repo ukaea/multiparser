@@ -6,7 +6,7 @@ authors = ["Kristian Zarębski <kristian.zarebski@ukaea.uk>"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT",
+    "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
     "Operating System :: Unix",
     "Programming Language :: Python :: 3",
