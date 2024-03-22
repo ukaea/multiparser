@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "multiparser"
+name = "ukaea-multiparser"
 version = "0.1.0"
 description = "Multiple File Parser for monitoring and processing updates to a given set of output files."
 authors = ["Kristian Zarębski <kristian.zarebski@ukaea.uk>"]
@@ -20,6 +20,9 @@ keywords = [
     "parsing",
     "monitoring",
     "logging"
+]
+packages = [
+    { include = "multiparser" },
 ]
 readme = "README.md"
 
