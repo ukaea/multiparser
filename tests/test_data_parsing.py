@@ -182,7 +182,10 @@ def test_parse_delimited(fake_delimited_log, request, header) -> None:
     ),
     ids=("header", "no_header")
 )
-def test_tail_csv(fake_delimited_log, header) -> None:
+@pytest.mark.parametrize(
+    "convert", (True, False)
+)
+def test_tail_csv(fake_delimited_log, header, convert) -> None:
     _file = fake_delimited_log
 
     with open(_file) as in_f:
@@ -195,6 +198,7 @@ def test_tail_csv(fake_delimited_log, header) -> None:
         time.sleep(0.1)
         _parsed_data  = mp_parse.record_log(
             input_file=_file,
+            convert=convert,
             tracked_values=None,
             parser_func=log_record_csv,
             headers=header

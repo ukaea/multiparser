@@ -200,17 +200,21 @@ def _record_any_delimited(
             not header_pattern,
         ]
     ):
-        return {"headers": _line}, {}
+        return {"headers": _line_components}, {}
 
-    # If a patter has been specified for headers, but none have been identified yet
-    # then return as we only want data that follows a header line
-    if not headers and header_pattern:
-        return {}, {}
+    # If a pattern has been specified for headers, but none have been identified yet
+    # then return as we only want data that follows a header line else raise exception
+    # if no pattern provided
+    if not headers:
+        if header_pattern:
+            return {}, {}
+        else:
+            raise RuntimeError("Expected header definition in delimited data extract")
 
     if convert:
-        _line = [_converter(i) for i in _line]
+        _line_components = [_converter(i) for i in _line_components]
 
-    _out: typing.Dict[str, typing.Any] = dict(zip(headers, _line))  # type: ignore
+    _out: dict[str, typing.Any] = dict(zip(headers, _line_components))
 
     if not tracked_values:
         return {}, _out
