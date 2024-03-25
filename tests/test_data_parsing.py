@@ -164,7 +164,8 @@ def test_parse_delimited(fake_delimited_log, request, header) -> None:
             delimiter=expected_output[0][0],
             headers=header
         )
-        _collected += [i[1].values() for i in _parsed_data]
+        for i in _parsed_data:
+            _collected += i[1]
 
     assert all(i in _collected for i in _all)
 
@@ -203,6 +204,7 @@ def test_tail_csv(fake_delimited_log, header, convert) -> None:
             parser_func=log_record_csv,
             headers=header
         )
-        _collected += [i[1].values() for i in _parsed_data]
+        for i in _parsed_data:
+            _collected += i[1]
 
     assert all(i in _collected for i in _all)

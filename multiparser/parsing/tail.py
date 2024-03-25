@@ -257,26 +257,23 @@ def record_with_delimiter(
     """
     # The delimiter parser assumes each line is a new data entry so
     # revert back to list of lines here
-    _file_lines: typing.List[str] = [i for i in file_content.split("\n") if i]
+    _file_lines: list[str] = [i for i in file_content.split("\n") if i]
 
-    _parsed_data: typing.List[TimeStampedData] = []
-    _global_metadata: typing.Dict[str, str | int | typing.List[str]] = {}
+    _parsed_data: tuple[dict[str, typing.Any], list[dict[str, typing.Any]]] = {}, []
 
     if headers:
-        _global_metadata["headers"] = headers
-
-    _parsed_lines_output: typing.List[typing.Dict[str, typing.Any]] = []
+        _parsed_data[0]["headers"] = headers
 
     if not _file_lines:
-        return []
+        return {}, []
 
     for file_line in _file_lines:
         _parsed_line: TimeStampedData = _record_any_delimited(
-            file_content=file_line,
+            file_line,
             delimiter=delimiter,
             tracked_values=tracked_values,
             convert=convert,
-            **(_global_metadata | kwargs),
+            **(_parsed_data[0] | kwargs),
         )
 
         if not isinstance(_parsed_line[1], dict):
@@ -289,18 +286,15 @@ def record_with_delimiter(
         # of processing the block, e.g. if headers are set. May have further use in future
         # if other info is extractable but not necessarily present in the first line
         for key, value in _parsed_line[0].items():
-            if key in ("headers",) and not _global_metadata.get(key):
-                _global_metadata["headers"] = value
+            if key in ("headers",) and not _parsed_data[0].get(key):
+                _parsed_data[0]["headers"] = value
             else:
-                _global_metadata[key] = value
-        _parsed_lines_output.append(_parsed_line[1])
-
-    for _parse_entry in _parsed_lines_output:
-        _parsed_data.append((_global_metadata, _parse_entry))
+                _parsed_data[0][key] = value
+        _parsed_data[1].append(_parsed_line[1])
 
     # Headers must be read when the file is first created else any values after read
     # will not align with these headings
-    if not _global_metadata.get("headers"):
+    if not _parsed_data[0].get("headers"):
         raise AssertionError("Failed to retrieve file header during initial read")
 
     return _parsed_data
@@ -336,26 +330,23 @@ def record_csv(
     """
     # The delimiter parser assumes each line is a new data entry so
     # revert back to list of lines here
-    _file_lines: typing.List[str] = [i for i in file_content.split("\n") if i]
+    _file_lines: list[str] = [i for i in file_content.split("\n") if i]
 
-    _parsed_data: typing.List[TimeStampedData] = []
-    _global_metadata: typing.Dict[str, str | int | typing.List[str]] = {}
+    _parsed_data: tuple[dict[str, typing.Any], list[dict[str, typing.Any]]] = {}, []
 
     if headers:
-        _global_metadata["headers"] = headers
-
-    _parsed_lines_output: typing.List[typing.Dict[str, typing.Any]] = []
+        _parsed_data[0]["headers"] = headers
 
     if not _file_lines:
-        return []
+        return {}, []
 
     for file_line in _file_lines:
         _parsed_line: TimeStampedData = _record_any_delimited(
-            file_content=file_line,
+            file_line,
             delimiter=",",
             tracked_values=tracked_values,
             convert=convert,
-            **(_global_metadata | kwargs),
+            **(_parsed_data[0] | kwargs),
         )
 
         if not isinstance(_parsed_line[1], dict):
@@ -368,18 +359,15 @@ def record_csv(
         # of processing the block, e.g. if headers are set. May have further use in future
         # if other info is extractable but not necessarily present in the first line
         for key, value in _parsed_line[0].items():
-            if key in ("headers",) and not _global_metadata.get(key):
-                _global_metadata["headers"] = value
+            if key in ("headers",) and not _parsed_data[0].get(key):
+                _parsed_data[0]["headers"] = value
             else:
-                _global_metadata[key] = value
-        _parsed_lines_output.append(_parsed_line[1])
-
-    for _parse_entry in _parsed_lines_output:
-        _parsed_data.append((_global_metadata, _parse_entry))
+                _parsed_data[0][key] = value
+        _parsed_data[1].append(_parsed_line[1])
 
     # Headers must be read when the file is first created else any values after read
     # will not align with these headings
-    if not _global_metadata.get("headers"):
+    if not _parsed_data[0].get("headers"):
         raise AssertionError("Failed to retrieve file header during initial read")
 
     return _parsed_data
