@@ -31,7 +31,7 @@ To use the parser within a `FileMonitor` session:
 
 ```python
 with multiparser.FileMonitor(timeout=10) as monitor:
-    monitor.track("custom_file.log", parser_func=parser_user_file_type)
+    monitor.track(path_glob_exprs="custom_file.log", parser_func=parser_user_file_type)
     monitor.run()
 ```
 
@@ -66,7 +66,7 @@ To use the parser within a `FileMonitor` session:
 
 ```python
 with multiparser.FileMonitor(timeout=10) as monitor:
-    monitor.tail("custom_file.log", parser_func=parser_user_file_type)
+    monitor.tail(path_glob_exprs="custom_file.log", parser_func=parser_user_file_type)
     monitor.run()
 ```
 

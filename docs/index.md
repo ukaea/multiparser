@@ -34,7 +34,7 @@ Multiparser is a framework developed by the United Kingdom Atomic Energy Authori
         per_thread_callback=callback,
         timeout=10,
     ) as monitor:
-        monitor.tail("*.log", [r"^completion: (\d+)%"], ["completion"])
+        monitor.tail(path_glob_exprs="*.log", [r"^completion: (\d+)%"], ["completion"])
         monitor.run()
 
     ```
