@@ -8,6 +8,7 @@ which are files requiring only the read of the latest line, and full files
 which are defined as those requiring the whole file to be re-read on modification
 
 """
+
 __date__ = "2023-10-16"
 __author__ = "Kristian Zarebski"
 __maintainer__ = "Kristian Zarebski"
@@ -222,7 +223,7 @@ class FileThreadLauncher:
                     # Pass previous cached metadata to the parser in case required
                     _parsed = self._parsing_callback(
                         file_name,
-                        tracked_vals,
+                        tracked_values=tracked_vals,
                         parser_func=cstm_parser,
                         convert=convert,
                         ignore_lines=ignore_lines,

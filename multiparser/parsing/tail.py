@@ -6,6 +6,7 @@ Contains functions and decorators for parsing file data line by line.
 The contents are sent to a dictionary.
 
 """
+
 __date__ = "2023-10-16"
 __author__ = "Kristian Zarebski"
 __maintainer__ = "Kristian Zarebski"
@@ -22,10 +23,10 @@ import typing
 
 __all__ = ["record_csv", "log_parser", "record_log"]
 
-from multiparser.typing import TimeStampedData
+from multiparser.typing import ParserFunction, TimeStampedData
 
 
-def log_parser(parser: typing.Callable) -> typing.Callable:
+def log_parser(parser: ParserFunction) -> ParserFunction:
     """Attach metadata to the current parser call for a log parser.
 
     This is a decorator for parser functions which attaches information
@@ -34,12 +35,12 @@ def log_parser(parser: typing.Callable) -> typing.Callable:
 
     Parameters
     ----------
-    parser : typing.Callable
+    parser : Callable[[str, ...], tuple[dict[str, Any], dict[str, Any]]]
         the parser function to wrap
 
     Returns
     -------
-    typing.Callable
+    Callable[[str, ...], tuple[dict[str, Any], dict[str, Any]]]
         new parse function with metadata capturing
     """
 
@@ -50,7 +51,7 @@ def log_parser(parser: typing.Callable) -> typing.Callable:
             raise RuntimeError("Failed to retrieve argument '__read_bytes'")
         if not (_input_file := kwargs.get("__input_file")):
             raise RuntimeError("Failed to retrieve argument '__input_file'")
-        _meta_data: typing.Dict[str, str] = {
+        _meta_data: dict[str, str] = {
             "timestamp": datetime.datetime.fromtimestamp(
                 os.path.getmtime(_input_file)
             ).strftime("%Y-%m-%d %H:%M:%S.%f"),
@@ -76,13 +77,84 @@ def _converter(value: str) -> typing.Any:
     return value
 
 
+def _get_delimited_components(line: str, delimiter: str) -> list[str]:
+    """Extract the delimited components from a line within a file
+
+    Splits a file line into components based on the given delimiter
+
+    Parameters
+    ----------
+    line : str
+        line from a delimited file
+    delimiter : str
+        delimiter to split by
+
+    Returns
+    -------
+    list[str]
+        components retrieved from the line
+    """
+    _line: list[str] = []
+
+    # CSV files etc often use quotes for strings, where this is the case
+    # we can remove these, else assume quote is part of header/info
+    for component in line.split(delimiter):
+        _component = component.strip()
+        for quote_symbol in ("'", '"'):
+            if _component.startswith(quote_symbol) and _component.endswith(
+                quote_symbol
+            ):
+                _component = _component[1:-1]
+        _line.append(_component)
+
+    return _line
+
+
+def _get_filtered_delimited_content(
+    parsed_content: dict[str, typing.Any],
+    tracked_values: list[tuple[str | None, re.Pattern[str]]],
+) -> dict[str, typing.Any]:
+    """Filter the content extracted from a delimited file
+
+    Reduce recorded data to only items which pass a given set of tracked items
+
+    Parameters
+    ----------
+    parsed_content : dict[str, typing.Any]
+        full data prior to filtering
+    tracked_values : list[tuple[str  |  None, re.Pattern[str]]]
+        patterns to match for filtering
+
+    Returns
+    -------
+    dict[str, typing.Any]
+        the reduced file content data
+    """
+    _out_filtered: dict[str, typing.Any] = {}
+
+    for key, value in parsed_content.items():
+        for label, tracked_val in tracked_values:
+            label = label or key
+
+            if any(
+                [
+                    (isinstance(tracked_val, str) and tracked_val == key),
+                    tracked_val.findall(key),
+                ]
+            ):
+                _out_filtered[label] = value
+
+    return _out_filtered
+
+
 @log_parser
 def _record_any_delimited(
     file_content: str,
+    *,
     delimiter: str,
-    headers: typing.List[str] | None = None,
-    header_pattern: str | re.Pattern | None = None,
-    tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
+    headers: list[str] | None = None,
+    header_pattern: str | re.Pattern[str] | None = None,
+    tracked_values: list[tuple[str | None, re.Pattern[str]]] | None = None,
     convert: bool = True,
     **_,
 ) -> TimeStampedData:
@@ -94,12 +166,12 @@ def _record_any_delimited(
         the contents of the file line
     delimiter : str
         the delimiter separating values within the file line
-    header : typing.List[str]
+    header : list[str]
         the file headers representing the keys for the values
     header_pattern : str | Pattern, optional
         if specified, a string or pattern which identifies which line is to be used
         for headers
-    tracked_values : typing.List[typing.Tuple[str  |  None, typing.Pattern]] | None, optional
+    tracked_values : list[tuple[str  |  None, re.Pattern[str]]] | None, optional
         regular expressions defining which values to track within the log file, by default None
     convert : bool, optional
         whether to convert values from string to integer etc, by default True
@@ -115,20 +187,9 @@ def _record_any_delimited(
     if headers and delimiter.join(headers) in file_content:
         return {}, {}
 
-    _line = []
+    _line_components: list[str] = _get_delimited_components(file_content, delimiter)
 
-    # CSV files etc often use quotes for strings, where this is the case
-    # we can remove these, else assume quote is part of header/info
-    for component in file_content.split(delimiter):
-        _component = component.strip()
-        for quote_symbol in ("'", '"'):
-            if _component.startswith(quote_symbol) and _component.endswith(
-                quote_symbol
-            ):
-                _component = _component[1:-1]
-        _line.append(_component)
-
-    if not _line:
+    if not _line_components:
         return {}, {}
 
     if not headers and any(
@@ -174,11 +235,11 @@ def _record_any_delimited(
 def record_with_delimiter(
     file_content: str,
     delimiter: str,
-    headers: typing.List[str] | None = None,
-    tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
+    headers: list[str] | None = None,
+    tracked_values: list[tuple[str | None, re.Pattern[str]]] | None = None,
     convert: bool = True,
     **kwargs,
-) -> typing.List[TimeStampedData]:
+) -> TimeStampedData:
     """Process a single line of a delimited file extracting the tracked values.
 
     Parameters
@@ -187,9 +248,9 @@ def record_with_delimiter(
         the contents of the file line
     delimiter : str
         the delimiter separating values within the file line
-    headers : typing.List[str]
+    headers : list[str]
         the file headers representing the keys for the values
-    tracked_values : typing.List[typing.Tuple[str  |  None, typing.Pattern]] | None, optional
+    tracked_values : list[tuple[str  |  None, re.Pattern[str]]] | None, optional
         regular expressions defining which values to track within the log file, by default None
     convert : bool, optional
         whether to convert values from string to integer etc, by default True
@@ -253,11 +314,11 @@ def record_with_delimiter(
 
 def record_csv(
     file_content: str,
-    headers: typing.List[str] | None = None,
-    tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
+    headers: list[str] | None = None,
+    tracked_values: list[tuple[str | None, re.Pattern[str]]] | None = None,
     convert: bool = True,
     **kwargs,
-) -> typing.List[TimeStampedData]:
+) -> TimeStampedData:
     """Process a single line of a CSV file extracting the tracked values.
 
     Parameters
@@ -266,9 +327,9 @@ def record_csv(
         the contents of the file line
     delimiter : str
         the delimiter separating values within the file line
-    header : typing.List[str]
+    header : list[str]
         the file headers representing the keys for the values
-    tracked_values : typing.List[typing.Tuple[str  |  None, typing.Pattern]] | None, optional
+    tracked_values : list[tuple[str  |  None, re.Pattern[str]]] | None, optional
         regular expressions defining which values to track within the log file, by default None
     convert : bool, optional
         whether to convert values from string to integer etc, by default True
@@ -330,10 +391,73 @@ def record_csv(
     return _parsed_data
 
 
+def _extract_label_value_pair(
+    regex_result: tuple[str, ...] | str,
+    label: str | None,
+    tracked_val: re.Pattern[str],
+    type_descriptor: str,
+) -> tuple[str, str]:
+    """Extract value and label information from a regular expression result
+
+    Based on the result object returned, this function retrieves the
+    value of interest and deduces the label to assign to this value.
+
+    Parameters
+    ----------
+    regex_result : tuple[str, ...] | str
+        the Regex result, either a tuple of strings representing both the value
+        and its label, or just the value itself
+    label : str | None
+        override the retrieved label (if any) with this
+    tracked_val : re.Pattern[str]
+        the regular expression used to retrieve this result
+    type_descriptor : str
+        additional prefix to state whether this is a log or full file search
+
+    Returns
+    -------
+    tuple[str, str]
+        the deduced label and value
+
+    Raises
+    ------
+    ValueError
+        if the regular expression retrieved insufficient (or too many) results
+    """
+    if isinstance(regex_result, tuple):
+        if len(regex_result) == 1:
+            if not label:
+                raise ValueError(
+                    "Expected label for regex with only single matching entry"
+                )
+            _value_str: str = regex_result[0]
+            _label: str = label
+        elif len(regex_result) == 2:
+            _label, _value_str = regex_result
+
+            # If the user has provided a label as well
+            # as regex capturing a label, the provided
+            # value takes precedence
+            _label = label or _label
+        else:
+            raise ValueError(
+                f"{type_descriptor} '{tracked_val}' with label assignment must return a single value"
+            )
+    else:
+        if not label:
+            raise ValueError(
+                f"{type_descriptor} '{tracked_val}' must have an associated label"
+            )
+        _label = label
+        _value_str = regex_result
+
+    return _label, _value_str
+
+
 @log_parser
 def _process_log_content(
     file_content: str,
-    tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
+    tracked_values: list[tuple[str | None, re.Pattern[str]]] | None = None,
     convert: bool = True,
     **_,
 ) -> TimeStampedData:
@@ -343,7 +467,7 @@ def _process_log_content(
     ----------
     file_content : str
         the contents of the file line
-    tracked_values : typing.List[typing.Tuple[str  |  None, typing.Pattern]] | None, optional
+    tracked_values : list[tuple[str  |  None, re.Pattern[str]]] | None, optional
         regular expressions defining which values to track within the log file, by default None
     convert : bool, optional
         whether to convert values from string to integer etc, by default True
@@ -351,13 +475,13 @@ def _process_log_content(
     Returns
     -------
     TimeStampedData
-        * metadata outlining properties such as modified time etc.
+        * unused
         * actual recorded data from the file.
     """
     if not tracked_values:
         return {}, {}
 
-    _out_data: typing.Dict[str, typing.Any] = {}
+    _out_data: dict[str, typing.Any] = {}
 
     for label, tracked_val in tracked_values:
         if isinstance(tracked_val, str):
@@ -373,43 +497,16 @@ def _process_log_content(
         _multiple_results: bool = len(_results) > 1
 
         for i, result in enumerate(_results):
-            if isinstance(result, tuple):
-                if len(result) == 1:
-                    if not label:
-                        raise ValueError(
-                            "Expected label for regex with only single matching entry"
-                        )
-                    _value_str: str = result[0]
-                    _label: str = label
-                elif len(result) == 2:
-                    _label, _value_str = result
-
-                    # If the user has provided a label as well
-                    # as regex capturing a label, the provided
-                    # value takes precedence
-                    _label = label or _label
-                else:
-                    raise ValueError(
-                        f"{_type} '{tracked_val}' with label assignment must return a single value"
-                    )
-            elif not label:
-                if len(result) != 2:
-                    raise ValueError(
-                        f"{_type} '{tracked_val}' without label assignment must return a key-value pair"
-                    )
-                _label, _value_str = result
-            else:
-                _value_str = result
-                _label = label
-
+            _label, _value_str = _extract_label_value_pair(
+                result, label, tracked_val, _type
+            )
             _label = f"{label}_{i}" if _multiple_results else _label
             _out_data[_label] = _converter(_value_str) if convert else _value_str
+
     return {}, _out_data
 
 
-def tail_file_n_bytes(
-    file_name: str, read_bytes: int | None
-) -> typing.Tuple[int, typing.List[str]]:
+def tail_file_n_bytes(file_name: str, read_bytes: int | None) -> tuple[int, list[str]]:
     """Read lines from the end of a file.
 
     This function retrieves the lines from a file,
@@ -427,7 +524,7 @@ def tail_file_n_bytes(
 
     Returns
     -------
-    typing.Tuple[int, typing.List[str]]
+    tuple[int, list[str]]
         * position at which read terminated
         * lines read
     """
@@ -440,13 +537,14 @@ def tail_file_n_bytes(
 
 def record_log(
     input_file: str,
-    tracked_values: typing.List[typing.Tuple[str | None, typing.Pattern]] | None = None,
+    *,
+    tracked_values: list[tuple[str | None, re.Pattern[str]]] | None = None,
     convert: bool = True,
-    ignore_lines: typing.List[typing.Pattern] | None = None,
-    parser_func: typing.Callable | None = None,
+    ignore_lines: list[re.Pattern[str]] | None = None,
+    parser_func: ParserFunction | None = None,
     __read_bytes: int | None = None,
-    **parser_kwargs: typing.Dict[str, typing.Any],
-) -> typing.List[TimeStampedData]:
+    **parser_kwargs,
+) -> TimeStampedData:
     """Record lines within a log type file.
 
     The 'read_bytes' option allows the reader to skip ahead of any lines
@@ -458,11 +556,11 @@ def record_log(
         the path of the file to be parsed
     skip_n_lines : int, optional
         skip the first 'n' lines before parsing. Default 0.
-    tracked_values : typing.List[typing.Tuple[str  |  None, typing.Pattern]] | None, optional
+    tracked_values : list[tuple[str  |  None, re.Pattern[str]]] | None, optional
         regular expressions defining the values to be monitored, by default None
     convert : bool, optional
         whether to convert parsed values to int, float etc, by default True
-    ignore_lines : typing.List[Pattern], optional
+    ignore_lines : list[Pattern], optional
         specify patterns defining lines which should be skipped
     parser_func : typing.Callable, optional
         specify an alternative tail parsing function
@@ -473,7 +571,7 @@ def record_log(
 
     Returns
     -------
-    typing.List[TimeStampedData]
+    TimeStampedData
         * metadata outlining properties such as modified time etc.
         * actual recorded data from the file.
     """
@@ -483,7 +581,7 @@ def record_log(
     # if this is the case loop through all patterns for each line,
     # the patterns can either be string literals or regex compiled patterns
     if ignore_lines:
-        _passing_lines: typing.List[str] = []
+        _passing_lines: list[str] = []
         for line in _lines:
             if any(
                 [
