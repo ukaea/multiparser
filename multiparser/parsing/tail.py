@@ -215,19 +215,9 @@ def _record_any_delimited(
     if not tracked_values:
         return {}, _out
 
-    _out_filtered: typing.Dict[str, typing.Any] = {}
-
-    for key, value in _out.items():
-        for label, tracked_val in tracked_values:
-            label = label or key
-
-            if any(
-                [
-                    (isinstance(tracked_val, str) and tracked_val == key),
-                    tracked_val.findall(key),
-                ]
-            ):
-                _out_filtered[label] = value
+    _out_filtered: dict[str, typing.Any] = _get_filtered_delimited_content(
+        parsed_content=_out, tracked_values=tracked_values
+    )
 
     return {}, _out_filtered
 
