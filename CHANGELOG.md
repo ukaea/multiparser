@@ -1,4 +1,9 @@
-# Unreleased
+# Unreleased [v1.0.1](https://github.com/ukaea/Multiparser/releases/tag/v1.0.1)
+
+* Fixed broken tail parsers due to incorrect handling of outputs.
+* Fixed bug whereby only one file in a group (e.g. `*.txt`) is parsed when `terminate_all_on_fail` is set.
+
+# 2024-03-22 [v1.0.0](https://github.com/ukaea/Multiparser/releases/tag/v1.0.0)
 
 * Added ability for FileMonitor to itself set termination triggers to stop external processes if required.
 * Added exception handling across all threads whereby any errors occurring in a thread are raised either after the monitor is terminated or causing all threads to be aborted.
