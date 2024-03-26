@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: Multiparser
+title: "Multiparser: A parallel multiple file parse trigger system"
 message: >-
   If you use this software, please cite it using the
   metadata from this file.
@@ -15,6 +15,10 @@ authors:
   - given-names: Andrew
     family-names: Lahiff
     affiliation: United Kingdom Atomic Energy Authority
+  - given-names: Matthew
+    family-names: Field
+    orcid: 'https://orcid.org/0009-0004-1390-0697'
+    affiliation: United Kingdom Atomic Energy Authority
   - given-names: James
     family-names: Panayis
     affiliation: United Kingdom Atomic Energy Authority
@@ -23,4 +27,9 @@ abstract: >-
   extraction of data from files.
 keywords:
   - parsing
-license: GPL-3.0
+license: MIT
+repository-code: "https://github.com/ukaea/multiparser"
+url: "https://ukaea.github.io/multiparser/"
+commit: 74a1eed5949a69c68d537824eb44b6204aa341da
+version: 1.0.1
+date-released: '2024-03-26'
