@@ -3,7 +3,7 @@
 Multiparser requires Python 3.10+ and is installed using pip:
 
 ```bash
-pip install git+https://git.ccfe.ac.uk/kzarebsk/multiparser
+pip install ukaea-multiparser
 ```
 
 Multiparser has two optional extra components that can be installed:
@@ -14,11 +14,11 @@ Multiparser has two optional extra components that can be installed:
 To install multiparser with any of these extras:
 
 ```bash
-pip install git+https://git.ccfe.ac.uk/kzarebsk/multiparser#egg=multiparser[arrow]
+pip install ukaea-multiparser[arrow]
 ```
 ```bash
-pip install git+https://git.ccfe.ac.uk/kzarebsk/multiparser#egg=multiparser[fortran]
+pip install ukaea-multiparser[fortran]
 ```
 ```bash
-pip install git+https://git.ccfe.ac.uk/kzarebsk/multiparser#egg=multiparser[arrow,fortran]
+pip install ukaea-multiparser[arrow,fortran]
 ```

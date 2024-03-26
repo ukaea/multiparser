@@ -12,7 +12,7 @@ hide:
 
 _A parallel multiple file parse trigger system_
 
-Multiparser is a framework focused on tracking changes to files, triggering user-defined callbacks on file creation and modification. This allows the user to monitor the output from multiple processes and define how metrics of interest are handled.
+Multiparser is a framework developed by the United Kingdom Atomic Energy Authority focused on tracking changes to files, triggering user-defined callbacks on file creation and modification. This allows the user to monitor the output from multiple processes and define how metrics of interest are handled. The project is available under an MIT license allowing reuse within both open source and proprietary software.
 
 !!! example "Multiparser Example"
 
@@ -34,7 +34,7 @@ Multiparser is a framework focused on tracking changes to files, triggering user
         per_thread_callback=callback,
         timeout=10,
     ) as monitor:
-        monitor.tail("*.log", [r"^completion: (\d+)%"], ["completion"])
+        monitor.tail(path_glob_exprs="*.log", [r"^completion: (\d+)%"], ["completion"])
         monitor.run()
 
     ```

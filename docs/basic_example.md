@@ -26,7 +26,10 @@ with FileMonitor(
 The files we are interested in are logs of the form `session_X_Y.log`, we use the `tail` method to track any additions to the file since last modification and look for key-value pairs of the form `key = value`:
 
 ```python
-monitor.track("session_*.log", tracked_values=[r"(\w+)\s*=\s*([\d\w\.]+)"])
+monitor.track(
+    path_glob_exprs="session_*.log",
+    tracked_values=[r"(\w+)\s*=\s*([\d\w\.]+)"]
+)
 ```
 
 finally we set the monitor to run:
@@ -65,7 +68,10 @@ trigger.set()
         termination_trigger=trigger,
         interval=1
     ) as monitor:
-        monitor.track("session_*.log", tracked_values=[r"(\w+)\s*=\s*([\d\w\.]+)"])
+        monitor.track(
+            path_glob_exprs="session_*.log",
+            tracked_values=[r"(\w+)\s*=\s*([\d\w\.]+)"]
+        )
 
         monitor.run()
 
