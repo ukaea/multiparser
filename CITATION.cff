@@ -30,6 +30,6 @@ keywords:
 license: MIT
 repository-code: "https://github.com/ukaea/multiparser"
 url: "https://ukaea.github.io/multiparser/"
-commit: 15354d440d63b9b8ba51059df87fed4e19058329
+commit: 0aa4b07de09b04148993537ebe6b2cdec8f52daa
 version: 1.0.1
 date-released: '2024-03-26'
