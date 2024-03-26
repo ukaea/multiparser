@@ -1,6 +1,6 @@
-<center>
-<img src="https://github.com/ukaea/Multiparser/blob/main/docs/media/logo.png", width="200">
-</center>
+<p align="center">
+<img src="https://raw.githubusercontent.com/ukaea/Multiparser/main/docs/media/logo.png", width="200">
+</p>
 
 # Multiparser
 [![PyPI Latest Release](https://img.shields.io/pypi/v/ukaea-multiparser.svg)](https://pypi.org/project/ukaea-multiparser/)

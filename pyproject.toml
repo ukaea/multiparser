@@ -1,15 +1,18 @@
 [tool.poetry]
-name = "multiparser"
-version = "0.1.0"
+name = "ukaea-multiparser"
+version = "1.0.1"
 description = "Multiple File Parser for monitoring and processing updates to a given set of output files."
 authors = ["Kristian Zarębski <kristian.zarebski@ukaea.uk>"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
     "Operating System :: Unix",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: System :: Monitoring",
     "Typing :: Typed"
 ]
@@ -18,7 +21,16 @@ keywords = [
     "monitoring",
     "logging"
 ]
+packages = [
+    { include = "multiparser" },
+]
 readme = "README.md"
+
+[tool.poetry.urls]
+Documentation = "https://ukaea.github.io/Multiparser/"
+Repository = "https://github.com/ukaea/Multiparser"
+Issues = "https://github.com/ukaea/Multiparser/issues"
+"Change Log" = "https://github.com/ukaea/Multiparser/blob/main/CHANGELOG.md"
 
 [tool.poetry.dependencies]
 python = "^3.10,<3.13"
@@ -26,7 +38,7 @@ f90nml = {version = "^1.4.3", optional = true}
 pandas = {version = "^2.1.1", optional = true}
 toml = "^0.10.2"
 pyyaml = "^6.0.1"
-pyarrow = {version = "^13.0.0", optional = true}
+pyarrow = {version = "^14.0.0", optional = true}
 flatdict = "^4.0.1"
 loguru = "^0.7.2"
 
@@ -35,8 +47,8 @@ arrow = ["pyarrow", "pandas"]
 fortran = ["f90nml"]
 
 [tool.poetry.group.testing.dependencies]
-pytest = "^7.4.2"
-pytest-sugar = "^0.9.7"
+pytest = "^8.1.1"
+pytest-sugar = "^1.0.0"
 pytest-cov = "^4.1.0"
 xeger = "^0.4.0"
 pytest-mock = "^3.11.1"
@@ -54,7 +66,7 @@ pymdown-extensions = "^10.7"
 mkdocs-mermaid2-plugin = "^1.1.1"
 mkdocs-git-revision-date-localized-plugin = "^1.2.2"
 mktestdocs = "^0.2.1"
-mkdocstrings = {extras = ["python"], version = "^0.24.0"}
+mkdocstrings = {extras = ["python"], version = "^0.24.1"}
 mike = "^2.0.0"
 
 
@@ -65,6 +77,7 @@ pandas-stubs = "^2.2.1.240316"
 types-toml = "^0.10.8.20240310"
 types-pyyaml = "^6.0.12.20240311"
 ruff = "^0.3.3"
+interrogate = "^1.5.0"
 
 [build-system]
 requires = ["poetry-core"]
@@ -84,3 +97,9 @@ markers = [
     "monitor: tests of the file monitor",
     "scenario: tests for scenarios"
 ]
+
+[tool.interrogate]
+ignore-init-method = true
+fail-under = 95
+verbose = 1
+exclude = ["docs", "tests", "multiparser/typing.py"]

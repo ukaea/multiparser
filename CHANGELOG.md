@@ -1,4 +1,4 @@
-# Unreleased [v1.0.1](https://github.com/ukaea/Multiparser/releases/tag/v1.0.1)
+# 2023-03-26 [v1.0.1](https://github.com/ukaea/Multiparser/releases/tag/v1.0.1)
 
 * Fixed broken tail parsers due to incorrect handling of outputs.
 * Fixed bug whereby only one file in a group (e.g. `*.txt`) is parsed when `terminate_all_on_fail` is set.
