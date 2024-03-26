@@ -393,7 +393,7 @@ class FileMonitor:
         *,
         path_glob_exprs: typing.List[str] | str,
         tracked_values: TrackedValues | None = None,
-        skip_lines_w_pattern: typing.List[typing.Pattern | str] | None = None,
+        skip_lines_w_pattern: typing.List[re.Pattern | str] | None = None,
         labels: str | typing.List[str | None] | None = None,
         callback: typing.Callable | None = None,
         parser_func: typing.Callable | None = None,
@@ -483,7 +483,7 @@ class FileMonitor:
                 "method 'tail'"
             )
 
-        _tracked_values: typing.List[str | typing.Pattern]
+        _tracked_values: typing.List[str | re.Pattern]
         _labels: typing.List[str | None]
 
         if tracked_values is None:
@@ -507,7 +507,7 @@ class FileMonitor:
 
         if not _tracked_values or parser_func:
             _reg_lab_expr_pairing: (
-                typing.List[typing.Tuple[str | None, typing.Pattern | str]] | None
+                typing.List[typing.Tuple[str | None, re.Pattern[str] | str]] | None
             ) = None
         else:
             _labels = _labels or [None] * len(_tracked_values)

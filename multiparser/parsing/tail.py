@@ -604,7 +604,7 @@ def record_log(
             tracked_values=tracked_values,
             convert=convert,
         )
-        _data.append(_processed) # type: ignore
+        _data.append(_processed)  # type: ignore
         _metadata = _metadata or _metadata_line
 
     return _metadata, _data

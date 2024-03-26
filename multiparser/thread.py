@@ -39,7 +39,8 @@ from multiparser.typing import (
     TrackableType,
     TimeStampedData,
     CallbackType,
-    Trackable,
+    MessageCallback,
+    ExceptionCallback,
 )
 
 
@@ -224,7 +225,7 @@ def _reparse_action(
     return _cached_metadata
 
 
-class FileThreadLauncher:
+class FileThreadLauncher(typing.Generic[CallbackType, TrackableType]):
     """Base class for all file monitor thread launchers.
 
     Spins up threads whenever a new file matching a given set of globular
@@ -234,13 +235,13 @@ class FileThreadLauncher:
     def __init__(
         self,
         file_thread_termination_trigger: threading.Event,
-        parsing_callback: typing.Callable,
-        notification_callback: typing.Callable,
+        parsing_callback: CallbackType,
+        notification_callback: MessageCallback,
         refresh_interval: float,
         trackables: TrackableList,
         file_limit: int | None,
         exclude_files_globex: typing.List[str] | None,
-        exception_callback: typing.Callable | None = None,
+        exception_callback: ExceptionCallback | None = None,
         file_thread_lock: typing.Any | None = None,
         file_list: typing.List[str] | None = None,
         flatten_data: bool = False,
@@ -285,12 +286,12 @@ class FileThreadLauncher:
             throwing a dummy exception of a known form
         """
         self._trackables: TrackableList = trackables
-        self._exception_callback: typing.Callable | None = exception_callback
+        self._exception_callback: ExceptionCallback | None = exception_callback
         self._terminate_on_file_thread_fail: bool = abort_on_fail
         self._lock: typing.Any | None = file_thread_lock
         self._termination_trigger: threading.Event = file_thread_termination_trigger
-        self._parsing_callback: typing.Callable = parsing_callback
-        self._notifier: typing.Callable = notification_callback
+        self._parsing_callback: CallbackType = parsing_callback
+        self._notifier: MessageCallback = notification_callback
         self._file_threads: typing.Dict[str, threading.Thread] = {}
         self._exclude_globex: typing.List[str] | None = exclude_files_globex
         self._records: typing.List[typing.Tuple[str, str]] = []
@@ -314,13 +315,13 @@ class FileThreadLauncher:
         self,
         file_name: str,
         flatten_data: bool,
-        tracked_values: Trackable,
+        tracked_values: list[TrackableType],
         callback: typing.Callable,
         static: bool = False,
         parser_func: typing.Callable | None = None,
         parser_kwargs: typing.Dict | None = None,
         convert: bool = True,
-        ignore_lines: typing.List[typing.Pattern | str] | None = None,
+        ignore_lines: typing.List[re.Pattern | str] | None = None,
         file_type: str | None = None,
         **_,
     ) -> None:
@@ -489,7 +490,9 @@ class FileThreadLauncher:
             )
 
 
-class LogFileThreadLauncher(FileThreadLauncher):
+class LogFileThreadLauncher(
+    FileThreadLauncher[LogFileParsingCallback, tuple[str | None, re.Pattern[str]]]
+):
     """Create a file thread launcher for tailing files.
 
     This class focuses on the monitoring of log files whereby only
@@ -549,7 +552,7 @@ class LogFileThreadLauncher(FileThreadLauncher):
         """
 
         super().__init__(
-            parsing_callback=mp_parse.record_log,
+            parsing_callback=mp_parse.record_log,  # type: ignore
             refresh_interval=refresh_interval,
             file_thread_lock=file_thread_lock,
             trackables=trackables,
@@ -566,7 +569,9 @@ class LogFileThreadLauncher(FileThreadLauncher):
         )
 
 
-class FullFileThreadLauncher(FileThreadLauncher):
+class FullFileThreadLauncher(
+    FileThreadLauncher[FullFileParsingCallback, re.Pattern[str] | str]
+):
     """Create a file thread launcher for full files.
 
     This class focuses on the monitoring of full files whereby the
@@ -627,7 +632,7 @@ class FullFileThreadLauncher(FileThreadLauncher):
         """
 
         super().__init__(
-            parsing_callback=mp_parse.record_file,
+            parsing_callback=mp_parse.record_file,  # type: ignore
             refresh_interval=refresh_interval,
             trackables=trackables,
             file_limit=file_limit,

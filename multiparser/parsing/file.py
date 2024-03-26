@@ -16,6 +16,7 @@ import csv
 import datetime
 import functools
 import json
+import re
 import os.path
 import pickle
 import platform
@@ -195,7 +196,7 @@ def _full_file_parse(parse_func, in_file, tracked_values) -> TimeStampedData:
 
 def record_file(
     input_file: str,
-    tracked_values: typing.List[typing.Pattern] | None,
+    tracked_values: typing.List[re.Pattern[str]] | None,
     parser_func: typing.Callable | None,
     file_type: str | None,
     **_,
@@ -209,7 +210,7 @@ def record_file(
     ----------
     input_file : str
         the file to parse
-    tracked_values : typing.List[typing.Pattern] | None
+    tracked_values : typing.List[re.Pattern[str]] | None
         regular expressions defining the values to be monitored, by default None
     parser_func : typing.Callable | None
         a custom parser to use for the given file
@@ -228,7 +229,7 @@ def record_file(
         if the given file type is not recognised
     """
     _extension: str = file_type or os.path.splitext(input_file)[1].replace(".", "")
-    _tracked_vals: typing.List[typing.Pattern] | None = tracked_values or []
+    _tracked_vals: typing.List[re.Pattern[str]] | None = tracked_values or []
 
     if parser_func:
         return _full_file_parse(parser_func, input_file, _tracked_vals)
