@@ -47,6 +47,14 @@ def _default_callback(
     )
 
 
+def _check_log_globex(trackables: list[LogFileTrackable]) -> None:
+    """Check globular expressions before passing them to thread"""
+    for expression in trackables:
+        if not isinstance(_glob_ex := expression["glob_expr"], str):
+            raise AssertionError("Globular expression must be of type AnyStr")
+        glob.glob(_glob_ex)
+
+
 class FileMonitor:
     """The FileMonitor class is used to monitor a directory for file changes
 
@@ -532,11 +540,7 @@ class FileMonitor:
                 for g in path_glob_exprs
             ]
 
-        # Check globular expressions before passing them to thread
-        for expression in self._log_trackables:
-            if not isinstance(_glob_ex := expression["glob_expr"], str):
-                raise AssertionError("Globular expression must be of type AnyStr")
-            glob.glob(_glob_ex)
+        _check_log_globex(self._log_trackables)
 
     @classmethod
     def _spin_timer(cls, duration: int, trigger: Event) -> None:
