@@ -6,6 +6,7 @@ Contains functions and decorators for parsing file data as a whole.
 The contents are sent to a dictionary.
 
 """
+
 __date__ = "2023-10-16"
 __author__ = "Kristian Zarebski"
 __maintainer__ = "Kristian Zarebski"

@@ -49,5 +49,5 @@ repos:
     rev: v0.3.3
     hooks:
       - id: ruff
-        args: [ --fix --exit-non-zero-on-fix]
+        args: [ --fix, --exit-non-zero-on-fix]
       - id: ruff-format
