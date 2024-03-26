@@ -157,7 +157,7 @@ def test_parse_delimited(fake_delimited_log, request, header) -> None:
 
     for _ in range(10):
         time.sleep(0.1)
-        _parsed_data  = mp_parse.record_log(
+        _, _parsed_data  = mp_parse.record_log(
             input_file=_file,
             tracked_values=None,
             parser_func=record_with_delimiter,
@@ -165,7 +165,7 @@ def test_parse_delimited(fake_delimited_log, request, header) -> None:
             headers=header
         )
         for i in _parsed_data:
-            _collected += i[1]
+            _collected += i
 
     assert all(i in _collected for i in _all)
 
@@ -197,7 +197,7 @@ def test_tail_csv(fake_delimited_log, header, convert) -> None:
 
     for _ in range(10):
         time.sleep(0.1)
-        _parsed_data  = mp_parse.record_log(
+        _, _parsed_data  = mp_parse.record_log(
             input_file=_file,
             convert=convert,
             tracked_values=None,
@@ -205,6 +205,6 @@ def test_tail_csv(fake_delimited_log, header, convert) -> None:
             headers=header
         )
         for i in _parsed_data:
-            _collected += i[1]
+            _collected += i
 
     assert all(i in _collected for i in _all)

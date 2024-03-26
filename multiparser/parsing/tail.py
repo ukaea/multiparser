@@ -607,7 +607,7 @@ def record_log(
         _data.append(_processed)
         _metadata = _metadata or _metadata_line
 
-    return _metadata, _processed
+    return _metadata, _data
 
 
 # Built in parsers do not need to be validated by the File Monitor
