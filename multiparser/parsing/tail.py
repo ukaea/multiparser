@@ -442,7 +442,7 @@ def _process_log_content(
     tracked_values: list[tuple[str | None, re.Pattern[str]]] | None = None,
     convert: bool = True,
     **_,
-) -> TimeStampedData:
+) -> tuple[dict[str, typing.Any], dict[str, typing.Any]]:
     """Process a single line of a log file extracting the tracked values.
 
     Parameters
@@ -591,19 +591,23 @@ def record_log(
             convert=convert,
             **parser_kwargs,
         )
-        return (
-            _parsed_content if isinstance(_parsed_content, list) else [_parsed_content]
-        )
-    return [
-        _process_log_content(
+        return _parsed_content
+
+    _data: list[dict[str, typing.Any]] = []
+    _metadata: dict[str, typing.Any] = {}
+
+    for line in _lines:
+        _metadata_line, _processed = _process_log_content(
+            line,
             __input_file=input_file,
             __read_bytes=__read_bytes,
-            file_content=line,
             tracked_values=tracked_values,
             convert=convert,
         )
-        for line in _lines
-    ]
+        _data.append(_processed)
+        _metadata = _metadata or _metadata_line
+
+    return _metadata, _processed
 
 
 # Built in parsers do not need to be validated by the File Monitor
