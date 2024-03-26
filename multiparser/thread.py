@@ -295,7 +295,7 @@ class FileThreadLauncher:
             raise AssertionError("TESTING_MODE: Test AssertionError")
 
         while not self._termination_trigger.is_set():
-            if self.exceptions and self._terminate_on_file_thread_fail:
+            if any(self.exceptions.values()) and self._terminate_on_file_thread_fail:
                 break
 
             time.sleep(self._interval)
