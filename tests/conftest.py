@@ -170,3 +170,4 @@ def fake_log(request) -> (
             "labels": ("var_1", "var_2") if _labels else (None, None)
         }
         _process.join()
+        time.sleep(1)
