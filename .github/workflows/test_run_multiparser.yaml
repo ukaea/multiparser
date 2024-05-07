@@ -4,11 +4,18 @@ jobs:
   unit_tests:
     name: Unit Tests (${{ matrix.os }} Python${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
         python-version: [ '3.10', '3.11', '3.12' ]
+        experimental: [false]
+        include:
+          - os: ubuntu-latest
+            experimental: true
+            python-version: '3.13-dev'
+
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python
